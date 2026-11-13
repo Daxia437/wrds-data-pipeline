@@ -1,0 +1,12 @@
+{
+  "job": "crsp_full_history",
+  "output_dir": "data",
+  "route": "cloud",
+  "tables": [
+    {
+      "name": "crsp_dsf_full",
+      "sql": "select permno, date, prc, ret, retx, vol, shrout, cfacpr, cfacshr from crsp.dsf where date >= '1960-01-01'",
+      "force_cloud": true
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "job": "crsp_dsf_2024_q4",
+  "output_dir": "data",
+  "tables": [
+    {
+      "name": "crsp_dsf",
+      "sql": "select permno, date, prc, ret, vol, shrout from crsp.dsf where date between '2024-10-01' and '2024-12-31'"
+    },
+    {
+      "name": "comp_funda",
+      "library": "comp",
+      "table": "funda",
+      "columns": ["gvkey", "datadate", "fyear", "sale", "at", "ceq"],
+      "where": "indfmt='INDL' and datafmt='STD' and popsrc='D' and consol='C' and datadate >= '2024-01-01'"
+    }
+  ]
+}

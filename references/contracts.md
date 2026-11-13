@@ -1,0 +1,79 @@
+# Contracts
+
+Both paths write the same client-side layout, so analysis code never branches on route.
+
+## spec.json
+
+| field | required | meaning |
+|---|---|---|
+| `job` | yes | job name; also the output folder name |
+| `output_dir` | no | client output root, default `data` (relative to cwd) |
+| `route` | no | `local` / `cloud`; `cloud` disables the local size guard |
+| `script` | no | path to a Python file to run on the cloud host instead of the generic extractor |
+| `tables[]` | yes unless `script` | one entry per output file |
+
+Table entry:
+
+| field | meaning |
+|---|---|
+| `name` | output file stem, used as is |
+| `sql` | full SQL, preferred when joins or window functions are needed |
+| `library`, `table` | alternative to `sql` |
+| `columns` | list or `["*"]` |
+| `where`, `order_by` | appended to the generated SQL |
+| `force_cloud` | route this table to the cloud regardless of size |
+
+SQL must be read-only. Do not add a trailing semicolon; it is stripped anyway.
+
+## data/<job>/manifest.json
+
+```json
+{
+  "job": "crsp_dsf_2024_q4",
+  "route": "local",
+  "created_utc": "2026-11-13T02:00:00+00:00",
+  "wrds_user": "<wrds_user>",
+  "tables": [
+    {
+      "name": "crsp_dsf",
+      "file": "crsp_dsf.parquet",
+      "rows": 48511,
+      "bytes": 1103028,
+      "sha256": "...",
+      "columns": ["permno", "date", "prc", "ret", "vol", "shrout"],
+      "dtypes": {"permno": "Int64", "date": "datetime64[ns]"},
+      "sql": "select ... from crsp.dsf where ..."
+    }
+  ]
+}
+```
+
+Cloud jobs add `host`, `python`, `pandas` and an `errors` list. A non-empty `errors` list means some tables failed but others still landed; read `errors` before trusting the job.
+
+## data/<job>/provenance.json
+
+Local runs record the full spec, interpreter versions and output directory. Cloud pulls record `job_id`, `remote_dir`, `submitted_utc` and the download time.
+
+## Cloud layout
+
+```
+/scratch/uiccn/<user>/wrds_jobs/<job>/
+├── spec.json
+├── run_remote.py     # or user_script.py with --script
+├── job.sh            # SGE directives, -l h_vmem=<mem>
+├── job.log           # stdout+stderr, ends with EXIT_CODE=<n>
+└── out/
+    ├── <table>.parquet
+    └── manifest.json
+```
+
+`data/<job>/cloud_run.json` on the client stores `job`, `job_id`, `remote_dir`, `entry`, `submitted_utc`, `user`. `status`, `pull` and `clean` read it; keep it until the remote directory is deleted.
+
+## Custom cloud scripts
+
+`--script my.py` uploads the file and runs it instead of `run_remote.py`. Requirements:
+
+- `cd` is already the remote job directory; write everything into `out/`.
+- Call `wrds.Connection()` with no arguments. `submit` provisions `~/.pgpass` (mode 600) from `.env` when it is missing.
+- End with `out/manifest.json` in the schema above if you want `pull` to read row counts and column names. Without it, `pull` fails by design.
+- Never print credentials; `job.log` is retained on scratch.
