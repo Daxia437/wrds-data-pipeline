@@ -9,9 +9,18 @@ Probed live against `<wrds_user>@wrds-cloud.wharton.upenn.edu`.
 | login host | `wrds-cloud.wharton.upenn.edu` (password auth, paramiko works) |
 | scheduler | SGE 8.12 (`AGE 2026.1.0`); `qsub`, `qstat`, `qsas` in `/gridware/sge/bin/lx-amd64` |
 | login node | 64 cores, 187 GB RAM, `ulimit -v` ≈ 4 GB per process |
-| home | `/home/uiccn/<user>` — 10 GB quota (1.97 GB used) |
-| scratch | `/scratch/uiccn/<user>` — 500 GB, **shared with the whole institution** |
+| home | `$HOME` (typically 10 GB quota) — resolve it with `sftp.normalize(".")`, never hard-code |
+| scratch | site-specific: `/scratch/<user>` or `/scratch/<institution>/<user>`; 500 GB at the verified site, shared with the whole institution |
 | postgres host | `wrds-pgdata.wharton.upenn.edu:9737`, db `wrds`, resolves internally to 192.168.9.200 |
+
+Scratch layout is **not** uniform across institutions. `run_cloud.py` therefore probes instead of assuming:
+
+1. `--remote-root` or `WRDS_CLOUD_ROOT`, when set;
+2. `/scratch/$USER` if it exists and is writable;
+3. `/scratch/*/$USER` (the institutional subdirectory pattern);
+4. `$HOME` as the fallback.
+
+The job root is `<base>/wrds_jobs`. At the verified site this resolves to `/scratch/uiccn/<user>/wrds_jobs`; elsewhere it will be `/scratch/<user>/wrds_jobs` or `$HOME/wrds_jobs` with no code change. Set `WRDS_CLOUD_ROOT` when a site needs a path the probe cannot guess.
 
 Default job resources come from site policy: `m_mem_free=8G`. Pass `--mem` to change it; do not exceed what the queue will grant.
 
@@ -42,7 +51,7 @@ With that file in place, `wrds.Connection()` works with no arguments, so uploade
 Every SAS grid session runs `~/autoexec.sas`, which assigns all WRDS librefs. A malformed final line breaks **every** `qsas` job with a misleading `Libref ... must be followed either by quoted string` error. It was found and fixed on 2026-11-12:
 
 ```sas
-libname scratch '/scratch/uiccn/<user>';
+libname scratch '<scratch-root>/<user>';   /* site-specific; probe it, do not copy this line */
 ```
 
 A backup sits at `~/autoexec.sas.bak`. Python jobs are unaffected by this file.

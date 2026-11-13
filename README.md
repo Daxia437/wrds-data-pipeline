@@ -140,7 +140,7 @@ data/<job>/
 └── <table>.parquet
 ```
 
-Cloud runs additionally keep a remote copy at `/scratch/<institution>/<user>/wrds_jobs/<job>/` with `job.log` and `out/`, and a local `cloud_run.json` linking the two.
+Cloud runs additionally keep a remote copy under `<remote_root>/<job>/` with `job.log` and `out/`, and a local `cloud_run.json` linking the two. `remote_root` is resolved on the cloud host at submit time — writable scratch if the site has it, otherwise `$HOME` — and can be pinned with `--remote-root` or `WRDS_CLOUD_ROOT`, so no institutional path is baked in.
 
 Date-like string columns are converted to `datetime64` before writing, so downstream code does not have to guess.
 

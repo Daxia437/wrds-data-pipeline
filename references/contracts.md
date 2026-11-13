@@ -57,7 +57,7 @@ Local runs record the full spec, interpreter versions and output directory. Clou
 ## Cloud layout
 
 ```
-/scratch/uiccn/<user>/wrds_jobs/<job>/
+<remote_root>/<job>/
 ├── spec.json
 ├── run_remote.py     # or user_script.py with --script
 ├── job.sh            # SGE directives, -l h_vmem=<mem>
@@ -66,6 +66,8 @@ Local runs record the full spec, interpreter versions and output directory. Clou
     ├── <table>.parquet
     └── manifest.json
 ```
+
+`remote_root` is resolved on the cloud host at submit time: `--remote-root`, then `WRDS_CLOUD_ROOT`, then `/scratch/$USER` if writable, then `/scratch/*/$USER`, then `$HOME`, each suffixed with `/wrds_jobs`. All remote paths are built from this value plus the job name; nothing institution-specific is hard-coded. `submit` records the resolved root in `cloud_run.json` so `clean` removes the right directory even if the probe would answer differently later.
 
 `data/<job>/cloud_run.json` on the client stores `job`, `job_id`, `remote_dir`, `entry`, `submitted_utc`, `user`. `status`, `pull` and `clean` read it; keep it until the remote directory is deleted.
 

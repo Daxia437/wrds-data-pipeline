@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import os
 import re
 import sys
 import time
@@ -21,7 +22,6 @@ from pathlib import Path
 import wrds_common as common
 
 HOST = "wrds-cloud.wharton.upenn.edu"
-REMOTE_ROOT = "/scratch/uiccn/{user}/wrds_jobs/{job}"
 PGPASS = "wrds-pgdata.wharton.upenn.edu:9737:wrds:{user}:{password}\n"
 
 JOB_TEMPLATE = """#!/bin/bash
@@ -55,6 +55,35 @@ def _run(ssh, cmd: str) -> tuple[int, str]:
     return code, (stdout.read().decode() + stderr.read().decode()).strip()
 
 
+def _remote_home(ssh) -> str:
+    """Remote home directory, without assuming an institutional layout."""
+    sftp = ssh.open_sftp()
+    try:
+        return sftp.normalize(".").rstrip("/")
+    finally:
+        sftp.close()
+
+
+def _detect_remote_root(ssh) -> str:
+    """Job root on the cloud host: scratch when writable, else the home directory.
+
+    WRDS sites arrange scratch differently (``/scratch/<user>``,
+    ``/scratch/<institution>/<user>``, or no scratch at all), so probe instead of
+    hard-coding.  ``WRDS_CLOUD_ROOT`` or ``--remote-root`` overrides this.
+    """
+    probe = (
+        'if [ -d "/scratch/$USER" ] && [ -w "/scratch/$USER" ]; then echo "/scratch/$USER"; '
+        'elif ls -d /scratch/*/"$USER" >/dev/null 2>&1; then ls -d /scratch/*/"$USER" | head -n 1; '
+        'elif [ -d "/scratch/$USER" ]; then echo "/scratch/$USER"; '
+        'else echo "$HOME"; fi'
+    )
+    _, out = _run(ssh, probe)
+    base = next((line.strip() for line in out.splitlines()[::-1] if line.strip()), "")
+    if not base:
+        base = _remote_home(ssh)
+    return f"{base.rstrip('/')}/wrds_jobs"
+
+
 def _ensure_pgpass(ssh) -> None:
     user, password = common.credentials()
     _, exists = _run(ssh, "test -f ~/.pgpass && echo ok")
@@ -62,7 +91,7 @@ def _ensure_pgpass(ssh) -> None:
         return
     sftp = ssh.open_sftp()
     try:
-        with sftp.open("/home/uiccn/%s/.pgpass" % user, "w") as handle:
+        with sftp.open(f"{_remote_home(ssh)}/.pgpass", "w") as handle:
             handle.write(PGPASS.format(user=user, password=password).encode())
     finally:
         sftp.close()
@@ -97,11 +126,12 @@ def cmd_submit(args) -> None:
     spec = common.load_spec(args.spec)
     job = re.sub(r"[^A-Za-z0-9_.-]", "_", spec["job"])
     user, _ = common.credentials()
-    remote_dir = REMOTE_ROOT.format(user=user, job=job)
 
     ssh = _ssh()
     try:
         _ensure_pgpass(ssh)
+        root = args.remote_root or os.environ.get("WRDS_CLOUD_ROOT") or _detect_remote_root(ssh)
+        remote_dir = f"{root.rstrip('/')}/{job}"
         _run(ssh, f"mkdir -p {remote_dir}")
         _run(ssh, f"rm -rf {remote_dir}/out {remote_dir}/job.log")
         sftp = ssh.open_sftp()
@@ -131,6 +161,7 @@ def cmd_submit(args) -> None:
             "job": spec["job"],
             "job_id": job_id,
             "remote_dir": remote_dir,
+            "remote_root": root,
             "entry": entry,
             "output_dir": spec.get("output_dir") or "data",
             "submitted_utc": common.utc_now(),
@@ -192,10 +223,16 @@ def _pull(ssh, state: dict, max_mb: float, only: list[str] | None) -> None:
     local_dir.mkdir(parents=True, exist_ok=True)
     sftp = ssh.open_sftp()
     try:
-        try:
-            entries = sftp.listdir_attr(f"{remote_dir}/out")
-        except IOError:
-            common.fail("remote out/ not found; the job may still be running")
+        # A job leaves the queue a few seconds before its files land on scratch.
+        deadline = time.time() + 120
+        while True:
+            try:
+                entries = sftp.listdir_attr(f"{remote_dir}/out")
+                break
+            except IOError:
+                if time.time() > deadline:
+                    common.fail("remote out/ not found; the job may still be running")
+                time.sleep(5)
         sizes = {entry.filename: entry.st_size for entry in entries}
 
         if "manifest.json" not in sizes:
@@ -239,16 +276,15 @@ def _pull(ssh, state: dict, max_mb: float, only: list[str] | None) -> None:
 
 
 def cmd_clean(args) -> None:
-    state_path = _state_path(args.job)
-    if state_path.is_file():
-        state = _load_state(args.job)
-        remote_dir = state["remote_dir"]
-    else:
-        user, _ = common.credentials()
-        remote_dir = REMOTE_ROOT.format(user=user, job=args.job)
-        print("cloud_run.json missing, using the default remote path")
     ssh = _ssh()
     try:
+        state_path = _state_path(args.job)
+        if state_path.is_file():
+            remote_dir = _load_state(args.job)["remote_dir"]
+        else:
+            root = args.remote_root or os.environ.get("WRDS_CLOUD_ROOT") or _detect_remote_root(ssh)
+            remote_dir = f"{root.rstrip('/')}/{args.job}"
+            print("cloud_run.json missing, probing the remote job root")
         _run(ssh, f"rm -rf {remote_dir}")
         print(f"removed {remote_dir}")
     finally:
@@ -266,6 +302,7 @@ def main() -> None:
     submit.add_argument("--timeout", type=int, default=1800)
     submit.add_argument("--mem", default="8G")
     submit.add_argument("--pull-max-mb", type=float, default=500)
+    submit.add_argument("--remote-root", help="job root on the cloud host; default is probed")
     submit.set_defaults(func=cmd_submit)
 
     status = sub.add_parser("status")
@@ -281,6 +318,7 @@ def main() -> None:
 
     clean = sub.add_parser("clean")
     clean.add_argument("--job", required=True)
+    clean.add_argument("--remote-root", help="job root on the cloud host; default is probed")
     clean.set_defaults(func=cmd_clean)
 
     args = parser.parse_args()

@@ -24,7 +24,9 @@ Read the failing SQL and the first error line before changing code.
 - **`Libref ... must be followed either by quoted string`** in a `qsas` log — broken `~/autoexec.sas`. This affects SAS jobs only; see `wrds-cloud-env.md`. Python `qsub` jobs are unaffected.
 - `still queued after 1800s` — institutional queue congestion, not an error. Check later with `status`; do not resubmit blindly, duplicates write to the same `out/`.
 - Job disappears from `qstat` but `job.log` is missing — the job may have failed before start. Run `qstat -j <id>` and check `sge_o_workdir`.
-- `remote out/ not found` on `pull` — the job is still running, or it never wrote output. `status` shows the log tail.
+- `remote out/ not found` on `pull` — the job is still running, or it never wrote output. `pull` already retries for 120 s because SGE drops the job from `qstat` a few seconds before files land; beyond that, check `status` for the log tail.
+- Job written somewhere unexpected — the scratch probe found no writable `/scratch/$USER` or `/scratch/*/$USER` and fell back to `$HOME/wrds_jobs`. Pin the location with `--remote-root /path/wrds_jobs` or `WRDS_CLOUD_ROOT`.
+- `mkdir: cannot create directory` / permission denied on submit — the probe chose a base the account cannot write, usually a stale institutional scratch. Override it with `WRDS_CLOUD_ROOT`. All remote paths are built from this one value; nothing is hard-coded per institution.
 - `outputs are X, above the pull limit` — intentional. The manifest is already downloaded; call `pull --tables a,b` for the tables an analysis step actually needs.
 - Script mode ignores your file — `--script` uploads it as `user_script.py` and runs it instead of the generic extractor. It must write into `out/`.
 

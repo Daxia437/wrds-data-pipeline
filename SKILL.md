@@ -44,7 +44,7 @@ data/<job>/
 └── <table>.parquet   # one file per table
 ```
 
-Cloud adds `cloud_run.json` (job id, remote dir, submit time) and keeps the remote copy under `/scratch/uiccn/<user>/wrds_jobs/<job>/` with `job.log` and `out/`. Full schemas: `references/contracts.md`.
+Cloud adds `cloud_run.json` (job id, remote dir, submit time) and keeps the remote copy under `<remote_root>/<job>/` with `job.log` and `out/`. `remote_root` is probed on the cloud host (writable scratch, then `$HOME`) and can be pinned with `--remote-root` or `WRDS_CLOUD_ROOT`; never assume an institutional path. Full schemas: `references/contracts.md`.
 
 Cloud scripts handed to `--script` must write into `out/` themselves and must call `wrds.Connection()` with no arguments (the skill provisions `~/.pgpass` on the cloud host).
 
