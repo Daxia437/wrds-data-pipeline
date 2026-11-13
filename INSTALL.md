@@ -15,7 +15,16 @@ WRDS_PASS=your_password
 
 The scripts search `.env` from the current directory upward, then `~/.env`.
 
-## WorkBuddy / Trae
+## WorkBuddy
+
+```bash
+git clone https://github.com/Daxia437/wrds-data-pipeline.git \
+  ~/.workbuddy/skills/wrds-data-pipeline
+```
+
+Project-scoped instead: `<project>/.workbuddy/skills/wrds-data-pipeline/`. The skill is picked up automatically on the next session.
+
+## Trae
 
 ```bash
 git clone https://github.com/Daxia437/wrds-data-pipeline.git \
@@ -24,7 +33,7 @@ git clone https://github.com/Daxia437/wrds-data-pipeline.git \
   ~/.trae/skills/wrds-data-pipeline        # international build
 ```
 
-Project-scoped instead: `<project>/.trae/skills/wrds-data-pipeline/`. The skill is picked up automatically on the next session.
+Project-scoped instead: `<project>/.trae/skills/wrds-data-pipeline/`.
 
 ## Claude Code
 
@@ -56,10 +65,10 @@ Upload `references/` to the Project's knowledge if you want it to answer questio
 
 ## Verify
 
-Run once per machine, from the project root:
+Run once per machine, from the project root (`<skill-dir>` is wherever you installed it):
 
 ```bash
-python ~/.claude/skills/wrds-data-pipeline/scripts/check_env.py
+python <skill-dir>/scripts/check_env.py
 ```
 
 It checks the local PostgreSQL connection, the cloud SSH login, the cloud Python stack and the cloud `~/.pgpass`.
@@ -69,8 +78,8 @@ It checks the local PostgreSQL connection, the cloud SSH login, the cloud Python
 Always keep the **project** as the working directory and call the scripts by absolute path:
 
 ```bash
-python ~/.claude/skills/wrds-data-pipeline/scripts/plan.py --spec specs/q4.json
-python ~/.claude/skills/wrds-data-pipeline/scripts/run_local.py --spec specs/q4.json
+python <skill-dir>/scripts/plan.py --spec specs/q4.json
+python <skill-dir>/scripts/run_local.py --spec specs/q4.json
 ```
 
 `data/<job>/` and `.env` resolve against the project directory, not the skill directory. Copy `assets/spec.example.json` into your project as a starting point.
@@ -78,7 +87,7 @@ python ~/.claude/skills/wrds-data-pipeline/scripts/run_local.py --spec specs/q4.
 ## Updating
 
 ```bash
-cd ~/.claude/skills/wrds-data-pipeline && git pull
+cd <skill-dir> && git pull
 ```
 
 Skill and project copies are independent; pull in each place you installed it.

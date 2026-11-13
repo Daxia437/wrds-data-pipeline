@@ -38,14 +38,15 @@ The skill is a plain folder — `SKILL.md` plus `scripts/` — with no agent-spe
 
 | Agent | Global | Project |
 |---|---|---|
-| WorkBuddy / Trae (CN) | `~/.trae-cn/skills/wrds-data-pipeline/` | `<project>/.trae/skills/wrds-data-pipeline/` |
-| WorkBuddy / Trae (international) | `~/.trae/skills/wrds-data-pipeline/` | `<project>/.trae/skills/wrds-data-pipeline/` |
+| WorkBuddy | `~/.workbuddy/skills/wrds-data-pipeline/` | `<project>/.workbuddy/skills/wrds-data-pipeline/` |
+| Trae (CN) | `~/.trae-cn/skills/wrds-data-pipeline/` | `<project>/.trae/skills/wrds-data-pipeline/` |
+| Trae (international) | `~/.trae/skills/wrds-data-pipeline/` | `<project>/.trae/skills/wrds-data-pipeline/` |
 | Claude Code | `~/.claude/skills/wrds-data-pipeline/` | `<project>/.claude/skills/wrds-data-pipeline/` |
 | Codex / Cursor / other `AGENTS.md` agents | point the agent at this repo | copy `AGENTS.md` into the project root |
 | ChatGPT | no filesystem — paste [`platforms/chatgpt-instructions.md`](platforms/chatgpt-instructions.md) into a Project or custom GPT | same |
 
 ```bash
-git clone https://github.com/Daxia437/wrds-data-pipeline.git ~/.claude/skills/wrds-data-pipeline
+git clone https://github.com/Daxia437/wrds-data-pipeline.git ~/.workbuddy/skills/wrds-data-pipeline
 ```
 
 Per-platform details, including how to run the commands when the skill lives outside your working directory: [`INSTALL.md`](INSTALL.md).
