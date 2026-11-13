@@ -37,10 +37,10 @@ Project-scoped instead: `<project>/.claude/skills/wrds-data-pipeline/`. `SKILL.m
 
 ## Codex, Cursor, and other `AGENTS.md` agents
 
-These read project instructions rather than a global skill directory. Copy [`AGENTS.md`](AGENTS.md) to the project root, or add one line to your existing `AGENTS.md`:
+These read project instructions rather than a global skill directory. Either point the agent at the repo in your existing `AGENTS.md`, or copy this repo's [`AGENTS.md`](AGENTS.md) to the project root and replace `<path-to-skill>` with the absolute path to the clone.
 
 ```markdown
-For WRDS data work, read <path-to-repo>/SKILL.md and follow it.
+For WRDS data work, read <path-to-skill>/SKILL.md and follow it.
 ```
 
 Then either clone the repo beside the project or reference it in place.
