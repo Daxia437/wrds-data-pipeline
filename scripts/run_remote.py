@@ -8,6 +8,7 @@ no credentials appear in the uploaded files.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import platform
@@ -52,8 +53,16 @@ def normalize_dates(frame):
             continue
         parsed = pd.to_datetime(frame[column], errors="coerce")
         if parsed.notna().mean() >= 0.95:
-            parsed_columns[column] = parsed
+            parsed_columns[column] = parsed.astype("datetime64[ns]")
     return frame.assign(**parsed_columns) if parsed_columns else frame
+
+
+def sha256_file(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def main() -> int:
@@ -83,6 +92,7 @@ def main() -> int:
                     "file": f"{name}.parquet",
                     "rows": int(len(frame)),
                     "bytes": os.path.getsize(path),
+                    "sha256": sha256_file(path),
                     "columns": list(frame.columns),
                     "dtypes": {c: str(t) for c, t in frame.dtypes.items()},
                     "sql": sql,
@@ -100,6 +110,7 @@ def main() -> int:
         "job": spec["job"],
         "route": "cloud",
         "created_utc": started,
+        "wrds_user": os.environ.get("USER") or os.environ.get("LOGNAME", ""),
         "host": platform.node(),
         "python": platform.python_version(),
         "pandas": pd.__version__,

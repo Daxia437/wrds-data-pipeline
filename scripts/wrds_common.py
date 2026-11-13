@@ -182,7 +182,7 @@ def normalize_dates(frame):
             continue
         parsed = pd.to_datetime(frame[column], errors="coerce")
         if parsed.notna().mean() >= 0.95:
-            parsed_columns[column] = parsed
+            parsed_columns[column] = parsed.astype("datetime64[ns]")
     return frame.assign(**parsed_columns) if parsed_columns else frame
 
 

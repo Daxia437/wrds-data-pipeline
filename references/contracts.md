@@ -48,7 +48,7 @@ SQL must be read-only. Do not add a trailing semicolon; it is stripped anyway.
 }
 ```
 
-Cloud jobs add `host`, `python`, `pandas` and an `errors` list. A non-empty `errors` list means some tables failed but others still landed; read `errors` before trusting the job.
+Cloud jobs produce the same fields (`wrds_user`, per-table `sha256` and `dtypes`) and add `host`, `python`, `pandas`, `elapsed_sec` per table and an `errors` list. A non-empty `errors` list means some tables failed but others still landed; read `errors` before trusting the job. Date columns are cast to `datetime64[ns]` on both routes, so a local and a cloud extract of the same query are identical in content.
 
 ## data/<job>/provenance.json
 
