@@ -2,6 +2,18 @@
 
 `wrds-data-pipeline` is a plain folder: `SKILL.md`, `scripts/`, `references/`, `assets/`. It calls Python from the shell and has no agent-specific API, so the same copy works across agents. Only the location differs.
 
+## Install with an agent (recommended)
+
+Paste this into the agent you use:
+
+```text
+Install the skill at https://github.com/Daxia437/wrds-data-pipeline
+
+Clone it into your skills directory, keep the folder name wrds-data-pipeline, and confirm SKILL.md is readable there. Then run scripts/check_env.py from my project root and report what passes. Do not create or print any credentials.
+```
+
+If the agent does not know its own skills directory, tell it the path from the platform sections below. Start a new session afterwards so the skill is registered.
+
 ## Prerequisites
 
 - Python 3.10+, `git`, and an SSH-capable shell (needed only for cloud jobs).
@@ -13,9 +25,11 @@ WRDS_USER=your_wrds_username
 WRDS_PASS=your_password
 ```
 
-The scripts search `.env` from the current directory upward, then `~/.env`.
+The scripts search `.env` from the current directory upward, then `~/.env`. Create this file yourself; an agent should never be asked to write or echo the password.
 
-## WorkBuddy
+## Manual installation
+
+### WorkBuddy
 
 ```bash
 git clone https://github.com/Daxia437/wrds-data-pipeline.git \
@@ -24,7 +38,7 @@ git clone https://github.com/Daxia437/wrds-data-pipeline.git \
 
 Project-scoped instead: `<project>/.workbuddy/skills/wrds-data-pipeline/`. The skill is picked up automatically on the next session.
 
-## Trae
+### Trae
 
 ```bash
 git clone https://github.com/Daxia437/wrds-data-pipeline.git \
@@ -35,7 +49,7 @@ git clone https://github.com/Daxia437/wrds-data-pipeline.git \
 
 Project-scoped instead: `<project>/.trae/skills/wrds-data-pipeline/`.
 
-## Claude Code
+### Claude Code
 
 ```bash
 git clone https://github.com/Daxia437/wrds-data-pipeline.git \
@@ -44,7 +58,7 @@ git clone https://github.com/Daxia437/wrds-data-pipeline.git \
 
 Project-scoped instead: `<project>/.claude/skills/wrds-data-pipeline/`. `SKILL.md` already carries the `name` and `description` frontmatter Claude Code reads for activation, so no extra configuration is required.
 
-## Codex, Cursor, and other `AGENTS.md` agents
+### Codex, Cursor, and other `AGENTS.md` agents
 
 These read project instructions rather than a global skill directory. Either point the agent at the repo in your existing `AGENTS.md`, or copy this repo's [`AGENTS.md`](AGENTS.md) to the project root and replace `<path-to-skill>` with the absolute path to the clone.
 
@@ -54,7 +68,7 @@ For WRDS data work, read <path-to-skill>/SKILL.md and follow it.
 
 Then either clone the repo beside the project or reference it in place.
 
-## ChatGPT
+### ChatGPT
 
 ChatGPT has no filesystem, so the skill runs in two halves:
 
