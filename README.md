@@ -34,18 +34,21 @@ Overrides exist for what the estimator cannot see: `plan.py --route local|cloud`
 
 ## Install
 
-The skill is a directory. Put it where the agent looks for skills.
+The skill is a plain folder — `SKILL.md` plus `scripts/` — with no agent-specific dependencies. Drop it wherever your agent looks for skills:
 
-| Scope | Path |
-|---|---|
-| Global (Trae CN) | `~/.trae-cn/skills/wrds-data-pipeline/` |
-| Global (Trae international) | `~/.trae/skills/wrds-data-pipeline/` |
-| Project only | `<project>/.trae/skills/wrds-data-pipeline/` |
+| Agent | Global | Project |
+|---|---|---|
+| WorkBuddy / Trae (CN) | `~/.trae-cn/skills/wrds-data-pipeline/` | `<project>/.trae/skills/wrds-data-pipeline/` |
+| WorkBuddy / Trae (international) | `~/.trae/skills/wrds-data-pipeline/` | `<project>/.trae/skills/wrds-data-pipeline/` |
+| Claude Code | `~/.claude/skills/wrds-data-pipeline/` | `<project>/.claude/skills/wrds-data-pipeline/` |
+| Codex / Cursor / other `AGENTS.md` agents | point the agent at this repo | copy `AGENTS.md` into the project root |
+| ChatGPT | no filesystem — paste [`platforms/chatgpt-instructions.md`](platforms/chatgpt-instructions.md) into a Project or custom GPT | same |
 
 ```bash
-git clone https://github.com/Daxia437/wrds-data-pipeline.git \
-  ~/.trae-cn/skills/wrds-data-pipeline
+git clone https://github.com/Daxia437/wrds-data-pipeline.git ~/.claude/skills/wrds-data-pipeline
 ```
+
+Per-platform details, including how to run the commands when the skill lives outside your working directory: [`INSTALL.md`](INSTALL.md).
 
 Once it is in place, ask for a WRDS extract, a replication dataset, or CRSP/Compustat/CSMAR data; the skill activates on its own. Commands can also be run directly, as below.
 
@@ -97,6 +100,8 @@ Write a spec — either raw SQL, or a table plus columns and filters:
 ```
 
 Let the router decide, then run:
+
+> Installed globally? Keep your project as the working directory and call the scripts by absolute path, e.g. `python ~/.claude/skills/wrds-data-pipeline/scripts/plan.py --spec spec.json`. The `data/` folder and `.env` are resolved from the project directory, not the skill directory.
 
 ```bash
 python scripts/plan.py --spec spec.json
@@ -150,6 +155,11 @@ Date-like string columns are converted to `datetime64` before writing, so downst
 
 ```text
 SKILL.md                    routing rules, commands, hard constraints
+AGENTS.md                   pointer for AGENTS.md-aware agents
+INSTALL.md                  per-platform installation
+README.md                   motivation, capabilities, usage
+platforms/
+└── chatgpt-instructions.md paste-ready instructions for ChatGPT
 scripts/
 ├── wrds_common.py          env loading, SQL assembly, date normalisation, manifests
 ├── check_env.py            one-time access check for both paths
