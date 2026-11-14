@@ -145,6 +145,25 @@ def decide(tables: list[dict], route_override: str, max_mb: float, max_rows: int
     return {"route": route, "reasons": reasons}
 
 
+def _inventory_notes(inventory: dict, spec_tables: list[dict]) -> list[str]:
+    """Warn before spending a query on a table the account is known to lack."""
+    notes: list[str] = []
+    for table in spec_tables:
+        ref = common.parse_libref(common.build_sql(table))
+        if not ref:
+            continue
+        qualified = f"{ref[0]}.{ref[1]}"
+        gap = common.gap_for(inventory, qualified)
+        if gap:
+            notes.append(f"{qualified}: failed before — {gap['error']}")
+        elif ref[0] not in inventory.get("schemas", {}):
+            notes.append(
+                f"{ref[0]} is not in the cached subscription snapshot; "
+                f"verify with discover.py --table {qualified}"
+            )
+    return notes
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--spec", required=True)
@@ -169,6 +188,12 @@ def main() -> None:
 
     conn = _connect_psycopg2()
     try:
+        # Quarterly subscription snapshot; prints a line only when it refreshes.
+        user, _ = common.credentials()
+        inventory = common.ensure_inventory(conn, user)
+        notes = _inventory_notes(inventory, spec["tables"])
+        for note in notes:
+            print(f"[warning] {note}", file=sys.stderr)
         tables = [estimate_table(conn, t, args.timeout_ms, args.sample_rows) for t in spec["tables"]]
     finally:
         conn.close()
@@ -178,6 +203,7 @@ def main() -> None:
         "job": spec["job"],
         "route": decision["route"],
         "reasons": decision["reasons"],
+        "inventory_notes": notes,
         "limits": {"max_local_mb": args.max_local_mb, "max_local_rows": args.max_local_rows},
         "totals": {
             "rows": sum(t["rows"] or 0 for t in tables),
@@ -200,6 +226,10 @@ def main() -> None:
     print("reasons  :")
     for reason in result["reasons"]:
         print(f"  * {reason}")
+    if result["inventory_notes"]:
+        print("inventory:")
+        for note in result["inventory_notes"]:
+            print(f"  ! {note}")
     print("\nnext:")
     if result["route"] == "cloud":
         print(f"  python scripts/run_cloud.py submit --spec {args.spec} --wait")

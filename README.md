@@ -58,14 +58,20 @@ Measured on real data: one quarter of CRSP daily is ~620K rows / ~18 MB (local);
 
 Subscriptions differ by university, and metadata is not proof of access: WRDS lists some tables whose underlying schema is not provisioned, and permission-denied surfaces only when you query. The skill probes instead of assuming.
 
+On the **first connection** it builds a grant-level snapshot of every reachable schema, caches it, and refreshes automatically after **90 days** — so a new subscription is picked up without anyone remembering to update a list. Failures learned during use (a table that turns out not to be queryable) are recorded and surfaced on the next run, and survive snapshot rebuilds.
+
 ```bash
-python <skill>/scripts/discover.py                             # schemas and table counts
+python <skill>/scripts/discover.py                             # cached snapshot: user, age, schema count
+python <skill>/scripts/discover.py --refresh                   # rebuild now
+python <skill>/scripts/discover.py --gaps                      # tables that failed at run time
 python <skill>/scripts/discover.py --schema ibes               # tables in a library
 python <skill>/scripts/discover.py --table comp.funda          # columns + live access probe
 python <skill>/scripts/discover.py --grep linktable            # find link tables by name
 ```
 
-`--table` prints `access: queryable` or the actual failure, e.g. `permission denied for schema crsp_a_ccm` for the CCM link table. Ask in plain language — "what IBES data do we have?" — and the agent runs this before writing SQL.
+`--table` prints `access: queryable` or the actual failure, e.g. `permission denied for schema crsp_a_ccm` for the CCM link table. Ask in plain language — "what IBES data do we have?" — and the agent runs this before writing SQL. `plan.py` reuses the snapshot, so a spec that targets a schema or table you cannot reach gets a warning instead of a wasted query.
+
+The cache lives in `~/.wrds_inventory.json`, falls back to the project directory when home is not writable, and can be relocated with `WRDS_INVENTORY`. It is per WRDS user; switching accounts triggers a rebuild.
 
 ## Use it
 

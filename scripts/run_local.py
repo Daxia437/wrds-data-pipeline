@@ -53,7 +53,13 @@ def main() -> None:
             sql = common.build_sql(table)
             name = table["name"]
             print(f"[{name}] querying ...", flush=True)
-            frame = db.raw_sql(sql, chunksize=args.chunk)
+            try:
+                frame = db.raw_sql(sql, chunksize=args.chunk)
+            except Exception as exc:
+                ref = common.parse_libref(sql)
+                if ref:
+                    common.learn_gap(user, f"{ref[0]}.{ref[1]}", str(exc))
+                raise
             frame = common.normalize_dates(frame)
             path = out_dir / f"{name}.parquet"
             frame.to_parquet(path, index=False, compression="snappy")

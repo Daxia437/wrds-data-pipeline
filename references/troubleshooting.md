@@ -8,6 +8,10 @@ Access is per institution and changes over time, so the examples below describe 
 
 | symptom | cause | action |
 |---|---|---|
+| `cannot cache the subscription inventory` | neither home nor the working directory is writable | set `WRDS_INVENTORY` to a writable path; the run continues without a cache |
+| snapshot still lists a library you lost access to | the 90-day cache has not expired | `discover.py --refresh` |
+| snapshot missing a library you just subscribed to | same | `discover.py --refresh`; the next `plan.py` reuses it |
+| a table warns "failed before" but works now | the gap was recorded earlier | `discover.py --table <schema>.<table>` clears it once the probe succeeds |
 | `permission denied for schema crsp_a_ccm` on `crsp.ccmxpf_linktable` / `lnkhist` | CRSP-Compustat link is a separate subscription | request CCM access, or link manually on `permno`+`gvkey` with your own crosswalk |
 | `relation "csmar_trade.trd_dalyr" does not exist` (also `trd_cndalym`, `trd_cale`) | table appears in metadata but the underlying schema is not provisioned | use `csmar.trd_adjustfactor` / `csmar.fs_combas`, or buy the trade module |
 | `relation "csmar_trade..."` for other tables | same as above | check with `select count(*)` before building a spec |

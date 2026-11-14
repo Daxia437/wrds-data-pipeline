@@ -54,6 +54,31 @@ Cloud jobs produce the same fields (`wrds_user`, per-table `sha256` and `dtypes`
 
 Local runs record the full spec, interpreter versions and output directory. Cloud pulls record `job_id`, `remote_dir`, `submitted_utc` and the download time.
 
+## Subscription inventory (`.wrds_inventory.json`)
+
+Written by `ensure_inventory()`, which `check_env.py`, `discover.py`, `plan.py` and `run_local.py` call. One file per WRDS user, valid for `ttl_days`, rebuilt automatically when missing, stale, or belonging to a different user.
+
+```json
+{
+  "wrds_user": "<wrds_user>",
+  "built_utc": "2026-11-14T02:46:34+00:00",
+  "ttl_days": 90,
+  "build_seconds": 0.7,
+  "schemas": {
+    "comp": {"tables": 210, "selectable": 210},
+    "ibes": {"tables": 194, "selectable": 194}
+  },
+  "gaps": {
+    "csmar.trd_dalyr": {
+      "error": "relation \"csmar_trade.trd_dalyr\" does not exist",
+      "learned_utc": "2026-11-14T02:51:07+00:00"
+    }
+  }
+}
+```
+
+`selectable` counts catalog tables with SELECT privilege; it is a grant-level answer and does not prove the storage exists, which is why `--table` adds a live probe. `gaps` collects run-time failures and is carried across rebuilds until the table is probed successfully. Location: `$WRDS_INVENTORY`, else `~/.wrds_inventory.json`, else the working directory.
+
 ## Cloud layout
 
 ```

@@ -22,11 +22,27 @@ def record(name: str, ok: bool, detail: str) -> None:
 def check_local_db() -> None:
     try:
         db = common.connect()
-        libs = db.list_libraries()
-        db.close()
-        record("local postgres", True, f"{len(libs)} libraries visible")
     except Exception as exc:
         record("local postgres", False, str(exc).splitlines()[0][:160])
+        return
+    try:
+        libs = db.list_libraries()
+        record("local postgres", True, f"{len(libs)} libraries visible")
+        user, _ = common.credentials()
+        try:
+            inventory = common.ensure_inventory(db, user)
+            age = common.inventory_age_days(inventory)
+            record(
+                "subscription snapshot",
+                True,
+                f"{len(inventory['schemas'])} reachable schemas, "
+                f"built {age:.0f} days ago, refreshes every {common.INVENTORY_TTL_DAYS} days "
+                f"-> {inventory['_path']}",
+            )
+        except Exception as exc:
+            record("subscription snapshot", False, str(exc).splitlines()[0][:160])
+    finally:
+        db.close()
 
 
 def check_cloud() -> None:
