@@ -70,7 +70,10 @@ def main() -> int:
     import wrds
 
     spec = json.loads(open("spec.json", encoding="utf-8").read())
-    os.makedirs("out", exist_ok=True)
+    meta_dir = "out"
+    data_dir = os.environ.get("WRDS_DATA_DIR") or meta_dir
+    os.makedirs(meta_dir, exist_ok=True)
+    os.makedirs(data_dir, exist_ok=True)
 
     started = datetime.now(timezone.utc).isoformat(timespec="seconds")
     db = wrds.Connection(verbose=False)
@@ -84,7 +87,7 @@ def main() -> int:
         try:
             frame = db.raw_sql(sql)
             frame = normalize_dates(frame)
-            path = os.path.join("out", f"{name}.parquet")
+            path = os.path.join(data_dir, f"{name}.parquet")
             frame.to_parquet(path, index=False, compression="snappy")
             tables.append(
                 {
@@ -117,7 +120,7 @@ def main() -> int:
         "tables": tables,
         "errors": errors,
     }
-    with open(os.path.join("out", "manifest.json"), "w", encoding="utf-8") as handle:
+    with open(os.path.join(meta_dir, "manifest.json"), "w", encoding="utf-8") as handle:
         json.dump(manifest, handle, indent=2, default=str)
 
     print(f"RESULT tables={len(tables)} errors={len(errors)}")

@@ -45,9 +45,9 @@ data/<job>/
 └── <table>.parquet   # one file per table
 ```
 
-Cloud adds `cloud_run.json` (job id, remote dir, submit time) and keeps the remote copy under `<remote_root>/<job>/` with `job.log` and `out/`. `remote_root` is probed on the cloud host (writable scratch, then `$HOME`) and can be pinned with `--remote-root` or `WRDS_CLOUD_ROOT`; never assume an institutional path. Full schemas: `references/contracts.md`.
+Cloud adds `cloud_run.json` (job id, remote dirs, submit time) and keeps code, logs and `out/manifest.json` under `<remote_root>/<job>/`, with `remote_root` defaulting to `~/wrds_jobs` so jobs survive a full or unprovisioned scratch. Pin it with `--remote-root` or `WRDS_CLOUD_ROOT`. Only large parquet outputs should go to scratch, via `--scratch-dir` or `WRDS_CLOUD_SCRATCH`. Full schemas: `references/contracts.md`.
 
-Cloud scripts handed to `--script` must write into `out/` themselves and must call `wrds.Connection()` with no arguments (the skill provisions `~/.pgpass` on the cloud host).
+Cloud scripts handed to `--script` must write metadata into `out/` (and large parquet into `$WRDS_DATA_DIR` when set) and must call `wrds.Connection()` with no arguments (the skill provisions `~/.pgpass` on the cloud host).
 
 ## Commands
 
@@ -63,7 +63,7 @@ python scripts/discover.py --live                            # table counts stra
 python scripts/check_env.py                                  # one-time access check
 python scripts/plan.py --spec spec.json [--route local|cloud] [--json]
 python scripts/run_local.py --spec spec.json [--force] [--chunk 500000]
-python scripts/run_cloud.py submit --spec spec.json [--script x.py] [--wait] [--mem 8G]
+python scripts/run_cloud.py submit --spec spec.json [--script x.py] [--wait] [--mem 8G] [--scratch-dir PATH]
 python scripts/run_cloud.py status --job <job>
 python scripts/run_cloud.py pull --job <job> [--max-mb 500] [--tables a,b]
 python scripts/run_cloud.py clean --job <job>

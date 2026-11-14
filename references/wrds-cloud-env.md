@@ -13,14 +13,12 @@ Probed live against `<wrds_user>@wrds-cloud.wharton.upenn.edu`.
 | scratch | site-specific: `/scratch/<user>` or `/scratch/<institution>/<user>`; 500 GB at the verified site, shared with the whole institution |
 | postgres host | `wrds-pgdata.wharton.upenn.edu:9737`, db `wrds`, resolves internally to 192.168.9.200 |
 
-Scratch layout is **not** uniform across institutions. `run_cloud.py` therefore probes instead of assuming:
+Scratch layout is **not** uniform across institutions, and it can be full or unavailable at any moment. `run_cloud.py` therefore keeps jobs in the home directory and uses scratch only when asked:
 
 1. `--remote-root` or `WRDS_CLOUD_ROOT`, when set;
-2. `/scratch/$USER` if it exists and is writable;
-3. `/scratch/*/$USER` (the institutional subdirectory pattern);
-4. `$HOME` as the fallback.
+2. otherwise `$HOME/wrds_jobs` on the cloud host.
 
-The job root is `<base>/wrds_jobs`. At the verified site this resolves to `/scratch/uiccn/<user>/wrds_jobs`; elsewhere it will be `/scratch/<user>/wrds_jobs` or `$HOME/wrds_jobs` with no code change. Set `WRDS_CLOUD_ROOT` when a site needs a path the probe cannot guess.
+Code, logs, specs and `out/manifest.json` stay under that job root. Large parquet outputs go to `<scratch_root>/<job>/out` only when `--scratch-dir` or `WRDS_CLOUD_SCRATCH` is set; at the verified site that root is `/scratch/uiccn/<user>/wrds_jobs`. Set `WRDS_CLOUD_ROOT` only when home is unsuitable.
 
 Default job resources come from site policy: `m_mem_free=8G`. Pass `--mem` to change it; do not exceed what the queue will grant.
 

@@ -107,7 +107,7 @@ data/<job>/
 └── <table>.parquet
 ```
 
-Cloud runs also keep a remote copy under `<remote_root>/<job>/` with `job.log` and `out/`, plus a local `cloud_run.json` linking the two. `remote_root` is resolved on the cloud host at submit time — writable scratch if the site has it, otherwise `$HOME` — and can be pinned with `--remote-root` or `WRDS_CLOUD_ROOT`, so no institutional path is baked in.
+Cloud runs keep the remote copy under `<remote_root>/<job>/` with `job.log`, `spec.json`, the uploaded script and `out/manifest.json`. `remote_root` defaults to `~/wrds_jobs` on the cloud host, so code, logs and results keep working when scratch is full or unprovisioned; pin it with `--remote-root` or `WRDS_CLOUD_ROOT`. Large parquet outputs can be redirected to scratch with `--scratch-dir /scratch/<institution>/<user>/wrds_jobs` (or `WRDS_CLOUD_SCRATCH`); metadata and logs always stay under `remote_root`.
 
 Date-like columns arrive as `datetime64[ns]` on both routes, so a local and a cloud extract of the same query are identical in content.
 

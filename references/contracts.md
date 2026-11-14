@@ -95,15 +95,15 @@ Each non-sample/trial library returned by WRDS's access-aware `wrds.list_librari
     └── manifest.json
 ```
 
-`remote_root` is resolved on the cloud host at submit time: `--remote-root`, then `WRDS_CLOUD_ROOT`, then `/scratch/$USER` if writable, then `/scratch/*/$USER`, then `$HOME`, each suffixed with `/wrds_jobs`. All remote paths are built from this value plus the job name; nothing institution-specific is hard-coded. `submit` records the resolved root in `cloud_run.json` so `clean` removes the right directory even if the probe would answer differently later.
+`remote_root` is resolved at submit time: `--remote-root`, then `WRDS_CLOUD_ROOT`, then `$HOME/wrds_jobs` on the cloud host. Code, logs, specs and `out/manifest.json` always live there, so a full or unprovisioned scratch cannot block a submission. Large parquet outputs can be redirected with `--scratch-dir` (or `WRDS_CLOUD_SCRATCH`), which writes them to `<scratch_root>/<job>/out`; `submit` records both paths in `cloud_run.json` so `pull` and `clean` target the right directories.
 
-`data/<job>/cloud_run.json` on the client stores `job`, `job_id`, `remote_dir`, `entry`, `submitted_utc`, `user`. `status`, `pull` and `clean` read it; keep it until the remote directory is deleted.
+`data/<job>/cloud_run.json` on the client stores `job`, `job_id`, `remote_dir`, `remote_meta_dir`, `remote_data_dir`, `entry`, `submitted_utc`, `user`. `status`, `pull` and `clean` read it; keep it until the remote directory is deleted.
 
 ## Custom cloud scripts
 
 `--script my.py` uploads the file and runs it instead of `run_remote.py`. Requirements:
 
-- `cd` is already the remote job directory; write everything into `out/`.
+- `cd` is already the remote job directory; write metadata into `out/` and large parquet into `$WRDS_DATA_DIR` when it is set.
 - Call `wrds.Connection()` with no arguments. `submit` provisions `~/.pgpass` (mode 600) from `.env` when it is missing.
 - End with `out/manifest.json` in the schema above if you want `pull` to read row counts and column names. Without it, `pull` fails by design.
-- Never print credentials; `job.log` is retained on scratch.
+- Never print credentials; `job.log` is retained in the home job directory.

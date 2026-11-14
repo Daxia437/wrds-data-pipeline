@@ -31,6 +31,7 @@ JOB_TEMPLATE = """#!/bin/bash
 #$ -o job.log
 #$ -l h_vmem={mem}
 cd {remote_dir}
+export WRDS_DATA_DIR={data_dir}
 python3 {entry}
 echo "EXIT_CODE=$?" >> job.log
 """
@@ -65,23 +66,14 @@ def _remote_home(ssh) -> str:
 
 
 def _detect_remote_root(ssh) -> str:
-    """Job root on the cloud host: scratch when writable, else the home directory.
+    """Job root on the cloud host: always the home directory.
 
-    WRDS sites arrange scratch differently (``/scratch/<user>``,
-    ``/scratch/<institution>/<user>``, or no scratch at all), so probe instead of
-    hard-coding.  ``WRDS_CLOUD_ROOT`` or ``--remote-root`` overrides this.
+    Code, logs, specs and the manifest live under ``~/wrds_jobs`` so jobs keep
+    working when scratch fills up or has no provisioned quota. Large parquet
+    outputs can be redirected with ``--scratch-dir``. ``WRDS_CLOUD_ROOT`` or
+    ``--remote-root`` overrides this.
     """
-    probe = (
-        'if [ -d "/scratch/$USER" ] && [ -w "/scratch/$USER" ]; then echo "/scratch/$USER"; '
-        'elif ls -d /scratch/*/"$USER" >/dev/null 2>&1; then ls -d /scratch/*/"$USER" | head -n 1; '
-        'elif [ -d "/scratch/$USER" ]; then echo "/scratch/$USER"; '
-        'else echo "$HOME"; fi'
-    )
-    _, out = _run(ssh, probe)
-    base = next((line.strip() for line in out.splitlines()[::-1] if line.strip()), "")
-    if not base:
-        base = _remote_home(ssh)
-    return f"{base.rstrip('/')}/wrds_jobs"
+    return f"{_remote_home(ssh)}/wrds_jobs"
 
 
 def _ensure_pgpass(ssh) -> None:
@@ -132,8 +124,13 @@ def cmd_submit(args) -> None:
         _ensure_pgpass(ssh)
         root = args.remote_root or os.environ.get("WRDS_CLOUD_ROOT") or _detect_remote_root(ssh)
         remote_dir = f"{root.rstrip('/')}/{job}"
+        scratch_root = args.scratch_dir or os.environ.get("WRDS_CLOUD_SCRATCH")
+        remote_meta_dir = f"{remote_dir}/out"
+        remote_data_dir = f"{scratch_root.rstrip('/')}/{job}/out" if scratch_root else remote_meta_dir
         _run(ssh, f"mkdir -p {remote_dir}")
         _run(ssh, f"rm -rf {remote_dir}/out {remote_dir}/job.log")
+        if remote_data_dir != remote_meta_dir:
+            _run(ssh, f"rm -rf {remote_data_dir}")
         sftp = ssh.open_sftp()
         try:
             sftp.putfo(
@@ -146,7 +143,11 @@ def cmd_submit(args) -> None:
                 sftp.put(str(common.SCRIPTS_DIR / "run_remote.py"), f"{remote_dir}/run_remote.py")
                 entry = "run_remote.py"
             job_sh = JOB_TEMPLATE.format(
-                name=job[:10], remote_dir=remote_dir, entry=entry, mem=args.mem
+                name=job[:10],
+                remote_dir=remote_dir,
+                entry=entry,
+                mem=args.mem,
+                data_dir=remote_data_dir,
             )
             sftp.putfo(io.BytesIO(job_sh.encode()), f"{remote_dir}/job.sh")
         finally:
@@ -162,6 +163,8 @@ def cmd_submit(args) -> None:
             "job_id": job_id,
             "remote_dir": remote_dir,
             "remote_root": root,
+            "remote_meta_dir": remote_meta_dir,
+            "remote_data_dir": remote_data_dir,
             "entry": entry,
             "output_dir": spec.get("output_dir") or "data",
             "submitted_utc": common.utc_now(),
@@ -216,28 +219,30 @@ def cmd_pull(args) -> None:
 
 
 def _pull(ssh, state: dict, max_mb: float, only: list[str] | None) -> None:
-    remote_dir = state["remote_dir"]
+    remote_meta_dir = state.get("remote_meta_dir") or f"{state['remote_dir']}/out"
+    remote_data_dir = state.get("remote_data_dir") or remote_meta_dir
     local_dir = common.output_root(
         {"job": state["job"], "output_dir": state.get("output_dir")}
     )
     local_dir.mkdir(parents=True, exist_ok=True)
     sftp = ssh.open_sftp()
     try:
-        # A job leaves the queue a few seconds before its files land on scratch.
+        # A job leaves the queue a few seconds before its files land on disk.
         deadline = time.time() + 120
         while True:
             try:
-                entries = sftp.listdir_attr(f"{remote_dir}/out")
+                entries = sftp.listdir_attr(remote_data_dir)
                 break
             except IOError:
                 if time.time() > deadline:
-                    common.fail("remote out/ not found; the job may still be running")
+                    common.fail("remote output directory not found; the job may still be running")
                 time.sleep(5)
         sizes = {entry.filename: entry.st_size for entry in entries}
 
-        if "manifest.json" not in sizes:
+        try:
+            sftp.get(f"{remote_meta_dir}/manifest.json", str(local_dir / "manifest.json"))
+        except IOError:
             common.fail("remote manifest.json missing; check the job log")
-        sftp.get(f"{remote_dir}/out/manifest.json", str(local_dir / "manifest.json"))
         manifest = json.loads((local_dir / "manifest.json").read_text(encoding="utf-8"))
 
         wanted = [t for t in manifest.get("tables", []) if not only or t["name"] in only]
@@ -257,7 +262,7 @@ def _pull(ssh, state: dict, max_mb: float, only: list[str] | None) -> None:
             if filename not in sizes:
                 print(f"missing on remote: {filename}")
                 continue
-            sftp.get(f"{remote_dir}/out/{filename}", str(local_dir / filename))
+            sftp.get(f"{remote_data_dir}/{filename}", str(local_dir / filename))
             print(f"pulled {filename} ({common.human_bytes(sizes[filename])})")
     finally:
         sftp.close()
@@ -267,7 +272,9 @@ def _pull(ssh, state: dict, max_mb: float, only: list[str] | None) -> None:
         "route": "cloud",
         "job": state["job"],
         "job_id": state.get("job_id"),
-        "remote_dir": remote_dir,
+        "remote_dir": state.get("remote_dir"),
+        "remote_meta_dir": remote_meta_dir,
+        "remote_data_dir": remote_data_dir,
         "submitted_utc": state.get("submitted_utc"),
         "output_dir": str(local_dir),
     }
@@ -279,14 +286,20 @@ def cmd_clean(args) -> None:
     ssh = _ssh()
     try:
         state_path = _state_path(args.job)
+        remote_data_dir = None
         if state_path.is_file():
-            remote_dir = _load_state(args.job)["remote_dir"]
+            state = _load_state(args.job)
+            remote_dir = state["remote_dir"]
+            remote_data_dir = state.get("remote_data_dir")
         else:
             root = args.remote_root or os.environ.get("WRDS_CLOUD_ROOT") or _detect_remote_root(ssh)
             remote_dir = f"{root.rstrip('/')}/{args.job}"
             print("cloud_run.json missing, probing the remote job root")
         _run(ssh, f"rm -rf {remote_dir}")
         print(f"removed {remote_dir}")
+        if remote_data_dir and remote_data_dir != f"{remote_dir}/out":
+            _run(ssh, f"rm -rf {remote_data_dir}")
+            print(f"removed {remote_data_dir}")
     finally:
         ssh.close()
 
@@ -302,7 +315,11 @@ def main() -> None:
     submit.add_argument("--timeout", type=int, default=1800)
     submit.add_argument("--mem", default="8G")
     submit.add_argument("--pull-max-mb", type=float, default=500)
-    submit.add_argument("--remote-root", help="job root on the cloud host; default is probed")
+    submit.add_argument("--remote-root", help="job root for code and logs; defaults to ~/wrds_jobs")
+    submit.add_argument(
+        "--scratch-dir",
+        help="redirect large parquet outputs to this scratch root; metadata stays in --remote-root",
+    )
     submit.set_defaults(func=cmd_submit)
 
     status = sub.add_parser("status")
@@ -318,7 +335,7 @@ def main() -> None:
 
     clean = sub.add_parser("clean")
     clean.add_argument("--job", required=True)
-    clean.add_argument("--remote-root", help="job root on the cloud host; default is probed")
+    clean.add_argument("--remote-root", help="job root for code and logs; defaults to ~/wrds_jobs")
     clean.set_defaults(func=cmd_clean)
 
     args = parser.parse_args()
