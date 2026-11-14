@@ -12,5 +12,5 @@ When the task involves WRDS extracts, replication datasets, or data from any WRD
    `python <path-to-skill>/scripts/plan.py --spec spec.json`
 3. Spec and manifest schemas: `<path-to-skill>/references/contracts.md`
 4. Failures: `<path-to-skill>/references/troubleshooting.md`
-5. Never write WRDS credentials into the repository; they belong in `.env` at the project root.
+5. Never write WRDS credentials into the repository; they belong in `~/.env`, with an optional project-level `.env` override.
 ```

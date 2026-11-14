@@ -58,7 +58,7 @@ python <skill>/scripts/run_cloud.py clean --job <job>
 **Output contract.** Both paths write `data/<job>/manifest.json` (rows, bytes, columns, dtypes, sha256, SQL per table), `data/<job>/provenance.json`, and `<table>.parquet`. Read column names and row counts from the manifest; never hard-code them. Date-like string columns arrive as `datetime64`.
 
 **Constraints.**
-- Credentials live in `.env` at my project root (`WRDS_USER`, `WRDS_PASS`). Never ask me to paste them into chat, a spec, or a script.
+- Credentials live in `~/.env` (`WRDS_USER`, `WRDS_PASS`), with an optional project-level `.env` override. Never ask me to paste them into chat, a spec, or a script.
 - SQL must be read-only and must not end with a semicolon.
 - Known gaps on the verified account: `crsp.ccmxpf_linktable` requires a separate CCM subscription; CSMAR `trd_dalyr` / `trd_cndalym` / `trd_cale` are listed but not provisioned; CRSP data ends 2024-12-31. Your account may differ — confirm with `discover.py`.
 - Prefer one spec per analysis step over one giant spec, so a failed table does not force a re-download.

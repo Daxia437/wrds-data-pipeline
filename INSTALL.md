@@ -18,14 +18,14 @@ If the agent does not know its own skills directory, tell it the path from the p
 
 - Python 3.10+, `git`, and an SSH-capable shell (needed only for cloud jobs).
 - Packages: `pip install wrds pandas pyarrow paramiko`
-- WRDS credentials in a `.env` at the **project** root, never in the skill folder:
+- WRDS credentials in `~/.env`, never in the skill folder. A project-level `.env` overrides it:
 
 ```dotenv
 WRDS_USER=your_wrds_username
 WRDS_PASS=your_password
 ```
 
-The scripts search `.env` from the current directory upward, then `~/.env`. Create this file yourself; an agent should never be asked to write or echo the password.
+The scripts search `.env` from the current directory upward, then `~/.env`; the project file wins so a second account can override the shared default. Create the file yourself; an agent should never be asked to write or echo the password. Restrict it to your user (`chmod 600`, or Windows file permissions) and keep it out of shared or synced folders.
 
 ## Manual installation
 
@@ -96,7 +96,7 @@ python <skill-dir>/scripts/plan.py --spec specs/q4.json
 python <skill-dir>/scripts/run_local.py --spec specs/q4.json
 ```
 
-`data/<job>/` and `.env` resolve against the project directory, not the skill directory. Copy `assets/spec.example.json` into your project as a starting point.
+`data/<job>/` resolves against the project directory, not the skill directory; `.env` comes from `~/.env` or the project directory. Copy `assets/spec.example.json` into your project as a starting point.
 
 ## Updating
 

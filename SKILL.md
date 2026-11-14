@@ -73,7 +73,7 @@ python scripts/run_cloud.py clean --job <job>
 
 ## Non-negotiable rules
 
-- Credentials come from `.env` at the project root (`WRDS_USER`, `WRDS_PASS`). Never print, echo or hard-code them; never write them into a spec, log or parquet path.
+- Credentials come from `~/.env` (`WRDS_USER`, `WRDS_PASS`), shared by every project and agent app under the same OS user; a project `.env` overrides it. Never print, echo or hard-code them; never write them into a spec, log or parquet path.
 - Always delete `*.parquet` / `*.csv` derivatives from the skill directory; they belong under `data/` or the project's own data folder.
 - Prefer one spec per analysis step over one giant spec, so a failed table does not force a re-download.
 - Check `references/troubleshooting.md` before debugging a failure; permission-denied and missing-schema errors are usually subscription issues, not code bugs.

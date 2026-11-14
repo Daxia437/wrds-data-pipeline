@@ -26,12 +26,14 @@ Start a new session after installing so the skill is picked up. Manual installat
 
 ### Then give it credentials
 
-The skill never asks for a password in conversation. Create `.env` at your **project root** yourself:
+The skill never asks for a password in conversation. Create `.env` in your **home directory** once — every project and agent app under the same OS user then shares it, on Windows, macOS and Linux:
 
 ```dotenv
 WRDS_USER=your_wrds_username
 WRDS_PASS=your_password
 ```
+
+A `.env` in a project directory overrides the home one, which is useful for a second account or a temporary switch. Keep the file out of shared and synced folders, and restrict its permissions (`chmod 600` on macOS/Linux).
 
 Python side needs `pip install wrds pandas pyarrow paramiko`. The agent can install those, but not the `.env`.
 

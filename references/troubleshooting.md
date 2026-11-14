@@ -23,7 +23,7 @@ Access is per institution and changes over time, so the examples below describe 
 
 - `plan.py` says cloud but the job is small — the row count timed out. Raise `--timeout-ms` or pass `--route local`.
 - Local writes are slow or memory-heavy — lower `--chunk`; parquet file size, not RAM, is the routing signal.
-- `.env` not found — `wrds_common.find_env_file()` walks up four directories from cwd, then `~/.env`. Run commands from the project root.
+- `.env` not found — `wrds_common.find_env_file()` walks up four directories from cwd, then `~/.env`. Put credentials in `~/.env` to share them across projects; a project `.env` overrides it.
 
 ## Cloud path
 

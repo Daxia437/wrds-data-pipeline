@@ -35,6 +35,9 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 # credentials
 # --------------------------------------------------------------------------- #
 def find_env_file() -> Path | None:
+    # A project .env overrides the user-level one, which keeps multi-account
+    # projects working. With no project file, ~/.env supplies credentials to
+    # every project and agent app under the same OS user.
     here = Path.cwd().resolve()
     for base in [here, *here.parents[:4]]:
         candidate = base / ".env"
@@ -53,7 +56,8 @@ def load_env() -> dict[str, str]:
     env_path = find_env_file()
     if env_path is None:
         raise SystemExit(
-            "No .env found. Create one at the project root with WRDS_USER and WRDS_PASS."
+            "No .env found. Create ~/.env with WRDS_USER and WRDS_PASS, "
+            "or a project-level .env to override it."
         )
     values: dict[str, str] = {}
     for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
