@@ -31,13 +31,13 @@ def check_local_db() -> None:
         user, _ = common.credentials()
         try:
             inventory = common.ensure_inventory(db, user)
-            age = common.inventory_age_days(inventory)
+            counts = inventory.get("status_counts", {})
             record(
                 "subscription snapshot",
                 True,
-                f"{len(inventory['schemas'])} reachable schemas, "
-                f"built {age:.0f} days ago, refreshes every {common.INVENTORY_TTL_DAYS} days "
-                f"-> {inventory['_path']}",
+                f"{counts.get('ok', 0)} usable / {counts.get('denied', 0)} denied libraries, "
+                f"probed {common.inventory_age_days(inventory):.0f} days ago, "
+                f"refreshes every {common.INVENTORY_TTL_DAYS} days -> {inventory['_path']}",
             )
         except Exception as exc:
             record("subscription snapshot", False, str(exc).splitlines()[0][:160])

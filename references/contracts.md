@@ -56,18 +56,21 @@ Local runs record the full spec, interpreter versions and output directory. Clou
 
 ## Subscription inventory (`.wrds_inventory.json`)
 
-Written by `ensure_inventory()`, which `check_env.py`, `discover.py`, `plan.py` and `run_local.py` call. One file per WRDS user, valid for `ttl_days`, rebuilt automatically when missing, stale, or belonging to a different user.
+Written by `ensure_inventory()`, which `check_env.py`, `discover.py` and `plan.py` call. The cache holds the current WRDS user, is valid for `ttl_days`, and is rebuilt automatically when missing, stale, from an older snapshot `version`, or belonging to a different user.
 
 ```json
 {
+  "version": 2,
   "wrds_user": "<wrds_user>",
   "built_utc": "2026-11-14T02:46:34+00:00",
   "ttl_days": 90,
-  "build_seconds": 0.7,
-  "schemas": {
-    "comp": {"tables": 210, "selectable": 210},
-    "ibes": {"tables": 194, "selectable": 194}
+  "build_seconds": 181.4,
+  "method": "live table probes of wrds.list_libraries(), samples excluded",
+  "libraries": {
+    "comp": {"status": "ok", "table": "anncomp"},
+    "some_library": {"status": "denied", "detail": "permission denied for schema ...", "failed_table": "some_table", "attempts": 12}
   },
+  "status_counts": {"ok": 48, "denied": 1, "broken": 2, "error": 0, "empty": 0},
   "gaps": {
     "csmar.trd_dalyr": {
       "error": "relation \"csmar_trade.trd_dalyr\" does not exist",
@@ -77,7 +80,7 @@ Written by `ensure_inventory()`, which `check_env.py`, `discover.py`, `plan.py` 
 }
 ```
 
-`selectable` counts catalog tables with SELECT privilege; it is a grant-level answer and does not prove the storage exists, which is why `--table` adds a live probe. `gaps` collects run-time failures and is carried across rebuilds until the table is probed successfully. Location: `$WRDS_INVENTORY`, else `~/.wrds_inventory.json`, else the working directory.
+For each non-sample/trial library returned by `wrds.list_libraries()`, visible tables are tried in order with a real first-column `LIMIT 1` query until one succeeds. `ok` means at least one table is queryable; `denied` means no table succeeded and permission was rejected; `broken` means no table succeeded and a referenced relation did not exist; `error` covers other query failures; `empty` means no table columns were visible. `attempts` records how many tables were tried. This is deliberately not based on catalog grants, which overstate subscriptions. One successful probe does not prove every table in the library works; use `discover.py --table` for the specific table. `gaps` collects run-time failures and is carried across rebuilds until the table is probed successfully. Location: `$WRDS_INVENTORY`, else `~/.wrds_inventory.json`, else the working directory.
 
 ## Cloud layout
 

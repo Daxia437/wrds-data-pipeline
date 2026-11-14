@@ -146,8 +146,9 @@ def decide(tables: list[dict], route_override: str, max_mb: float, max_rows: int
 
 
 def _inventory_notes(inventory: dict, spec_tables: list[dict]) -> list[str]:
-    """Warn before spending a query on a table the account is known to lack."""
+    """Warn before spending a query on a library the probe found unusable."""
     notes: list[str] = []
+    libraries = inventory.get("libraries", {})
     for table in spec_tables:
         ref = common.parse_libref(common.build_sql(table))
         if not ref:
@@ -156,10 +157,17 @@ def _inventory_notes(inventory: dict, spec_tables: list[dict]) -> list[str]:
         gap = common.gap_for(inventory, qualified)
         if gap:
             notes.append(f"{qualified}: failed before — {gap['error']}")
-        elif ref[0] not in inventory.get("schemas", {}):
+            continue
+        entry = libraries.get(ref[0])
+        if entry is None:
             notes.append(
-                f"{ref[0]} is not in the cached subscription snapshot; "
+                f"{ref[0]} is not in this account's WRDS library list; "
                 f"verify with discover.py --table {qualified}"
+            )
+        elif entry.get("status") != "ok":
+            notes.append(
+                f"{ref[0]} probed {entry.get('status')}: {entry.get('detail', '')} "
+                f"(snapshot {str(inventory.get('built_utc', ''))[:10]})"
             )
     return notes
 

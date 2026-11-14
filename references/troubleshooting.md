@@ -14,10 +14,10 @@ Access is per institution and changes over time, so the examples below describe 
 | a table warns "failed before" but works now | the gap was recorded earlier | `discover.py --table <schema>.<table>` clears it once the probe succeeds |
 | `permission denied for schema crsp_a_ccm` on `crsp.ccmxpf_linktable` / `lnkhist` | CRSP-Compustat link is a separate subscription | request CCM access, or link manually on `permno`+`gvkey` with your own crosswalk |
 | `relation "csmar_trade.trd_dalyr" does not exist` (also `trd_cndalym`, `trd_cale`) | table appears in metadata but the underlying schema is not provisioned | use `csmar.trd_adjustfactor` / `csmar.fs_combas`, or buy the trade module |
-| `relation "csmar_trade..."` for other tables | same as above | check with `select count(*)` before building a spec |
+| `relation "csmar_trade..."` for other tables | same as above | run `discover.py --table <schema>.<table>` before building a spec |
 | CRSP data stops at 2024-12-31 across `dsf`, `msf`, `dsi`, `stocknames` | dataset not refreshed past that date | confirm subscription status; do not report it as a query bug |
 
-`db.list_tables(library=...)` and `db.describe_table()` read metadata and can succeed for tables that are not actually queryable. Always run `select count(*)` once before trusting a new table.
+`db.list_tables(library=...)`, `db.describe_table()` and PostgreSQL privilege functions read metadata and can indicate access for tables that are not actually queryable. Always run `discover.py --table <schema>.<table>` before trusting a new table; its real-column `LIMIT 1` probe exposes denied or missing underlying relations without scanning the table. A library marked `ok` has passed one such probe, not a validation of all its tables.
 
 ## Local path
 

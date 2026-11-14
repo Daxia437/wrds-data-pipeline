@@ -10,7 +10,7 @@ Turn a data requirement (project step or paper replication) into either a local 
 ## Workflow
 
 1. **Write a spec** — copy `assets/spec.example.json` and fill `job` + `tables`. Each table is either raw `sql` or `library`/`table`/`columns`/`where`.
-2. **Confirm access for unfamiliar libraries** — the first connection builds a subscription snapshot automatically and caches it for 90 days, so repeat runs are instant. `python scripts/discover.py` shows the cached summary; `--refresh` rebuilds it, `--gaps` lists tables that failed at run time. Subscriptions vary by institution, so probe before writing SQL against a library you have not used on this account: `--schema <name>` lists tables, `--table <schema>.<table>` lists columns and runs a live access probe. `plan.py` reuses the snapshot and warns when a spec targets a schema or table the account is known to lack.
+2. **Confirm access for unfamiliar libraries** — the first connection probes visible tables in each non-sample library from `wrds.list_libraries()` until a real column query succeeds, and caches `ok` / `denied` / `broken` / `error` / `empty` for 90 days, so repeat runs are instant. A library is unusable only when every visible table fails. `python scripts/discover.py` shows the cached summary; `--libraries` lists every result, `--refresh` rebuilds it, and `--gaps` lists tables that failed at run time. Subscriptions vary by institution, so probe before writing SQL against a library you have not used on this account: `--schema <name>` lists tables, `--table <schema>.<table>` lists columns and runs a live access probe. The library snapshot is only a coverage signal; always verify the specific table. `plan.py` reuses the snapshot and warns when a spec targets a library or table known to be unusable.
 3. **Verify access once per machine** — `python scripts/check_env.py`. It checks local credentials, the PostgreSQL endpoint, the cloud SSH login, the cloud Python stack and the cloud `~/.pgpass`.
 4. **Let the router decide** — `python scripts/plan.py --spec spec.json`. It estimates rows and download bytes per table, then prints the route (`local` or `cloud`) with reasons.
 5. **Run the chosen path**:
@@ -54,6 +54,7 @@ Cloud scripts handed to `--script` must write into `out/` themselves and must ca
 ```bash
 python scripts/discover.py                                   # cached subscription summary
 python scripts/discover.py --refresh                         # rebuild the snapshot now
+python scripts/discover.py --libraries                       # every library probe result
 python scripts/discover.py --gaps                            # tables that failed before
 python scripts/discover.py --schema comp                     # tables in a schema
 python scripts/discover.py --table comp.funda                # columns + access probe
