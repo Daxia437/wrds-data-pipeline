@@ -10,7 +10,7 @@ Probed live against `<wrds_user>@wrds-cloud.wharton.upenn.edu`.
 | scheduler | SGE 8.12 (`AGE 2026.1.0`); `qsub`, `qstat`, `qsas` in `/gridware/sge/bin/lx-amd64` |
 | login node | 64 cores, 187 GB RAM, `ulimit -v` ≈ 4 GB per process |
 | home | `$HOME` (typically 10 GB quota) — resolve it with `sftp.normalize(".")`, never hard-code |
-| scratch | site-specific: `/scratch/<user>` or `/scratch/<institution>/<user>`; 500 GB at the verified site, shared with the whole institution |
+| scratch | site-specific and not portable across institutions; resolve it on the host at submit time, never hard-code a path |
 | postgres host | `wrds-pgdata.wharton.upenn.edu:9737`, db `wrds`, resolves internally to 192.168.9.200 |
 
 Scratch layout is **not** uniform across institutions, and it can be full or unavailable at any moment. `run_cloud.py` therefore keeps jobs in the home directory and uses scratch only when asked:
@@ -18,7 +18,7 @@ Scratch layout is **not** uniform across institutions, and it can be full or una
 1. `--remote-root` or `WRDS_CLOUD_ROOT`, when set;
 2. otherwise `$HOME/wrds_jobs` on the cloud host.
 
-Code, logs, specs and `out/manifest.json` stay under that job root. Large parquet outputs go to `<scratch_root>/<job>/out` only when `--scratch-dir` or `WRDS_CLOUD_SCRATCH` is set; at the verified site that root is `/scratch/uiccn/<user>/wrds_jobs`. Set `WRDS_CLOUD_ROOT` only when home is unsuitable.
+Code, logs, specs and `out/manifest.json` stay under that job root. Large parquet outputs go to `<scratch_root>/<job>/out` only when `--scratch-dir` or `WRDS_CLOUD_SCRATCH` is set; resolve the site's scratch root on the host instead of hard-coding one. Set `WRDS_CLOUD_ROOT` only when home is unsuitable.
 
 Default job resources come from site policy: `m_mem_free=8G`. Pass `--mem` to change it; do not exceed what the queue will grant.
 
