@@ -60,17 +60,17 @@ Written by `ensure_inventory()`, which `check_env.py`, `discover.py` and `plan.p
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "wrds_user": "<wrds_user>",
   "built_utc": "2026-11-14T02:46:34+00:00",
   "ttl_days": 90,
-  "build_seconds": 181.4,
-  "method": "live table probes of wrds.list_libraries(), samples excluded",
+  "build_seconds": 0.2,
+  "method": "wrds.list_libraries() access metadata (schema USAGE and view dependencies), samples excluded",
   "libraries": {
-    "comp": {"status": "ok", "table": "anncomp"},
-    "some_library": {"status": "denied", "detail": "permission denied for schema ...", "failed_table": "some_table", "attempts": 12}
+    "comp": {"status": "ok"},
+    "crsp": {"status": "ok"}
   },
-  "status_counts": {"ok": 48, "denied": 1, "broken": 2, "error": 0, "empty": 0},
+  "status_counts": {"ok": 91},
   "gaps": {
     "csmar.trd_dalyr": {
       "error": "relation \"csmar_trade.trd_dalyr\" does not exist",
@@ -80,7 +80,7 @@ Written by `ensure_inventory()`, which `check_env.py`, `discover.py` and `plan.p
 }
 ```
 
-For each non-sample/trial library returned by `wrds.list_libraries()`, visible tables are tried in order with a real first-column `LIMIT 1` query until one succeeds. `ok` means at least one table is queryable; `denied` means no table succeeded and permission was rejected; `broken` means no table succeeded and a referenced relation did not exist; `error` covers other query failures; `empty` means no table columns were visible. `attempts` records how many tables were tried. This is deliberately not based on catalog grants, which overstate subscriptions. One successful probe does not prove every table in the library works; use `discover.py --table` for the specific table. `gaps` collects run-time failures and is carried across rebuilds until the table is probed successfully. Location: `$WRDS_INVENTORY`, else `~/.wrds_inventory.json`, else the working directory.
+Each non-sample/trial library returned by WRDS's access-aware `wrds.list_libraries()` is recorded as `ok`, meaning authorized at the library level. WRDS applies schema `USAGE` and resolves friendly views to their dependent product relations; those views check `SELECT` on the underlying tables. Building the snapshot issues no per-table queries. This is deliberately different from raw `information_schema` visibility or a standalone `has_table_privilege()` check on an outer view, either of which can overstate access. Library authorization does not prove every table works; use `discover.py --table` for a real-column check of the specific table. `gaps` collects run-time failures and is carried across rebuilds until the table is probed successfully. Location: `$WRDS_INVENTORY`, else `~/.wrds_inventory.json`, else the working directory.
 
 ## Cloud layout
 

@@ -27,7 +27,7 @@ def check_local_db() -> None:
         return
     try:
         libs = db.list_libraries()
-        record("local postgres", True, f"{len(libs)} libraries visible")
+        record("local postgres", True, f"{len(libs)} libraries in WRDS access metadata")
         user, _ = common.credentials()
         try:
             inventory = common.ensure_inventory(db, user)
@@ -35,8 +35,8 @@ def check_local_db() -> None:
             record(
                 "subscription snapshot",
                 True,
-                f"{counts.get('ok', 0)} usable / {counts.get('denied', 0)} denied libraries, "
-                f"probed {common.inventory_age_days(inventory):.0f} days ago, "
+                f"{counts.get('ok', 0)} authorized libraries, "
+                f"built {common.inventory_age_days(inventory):.0f} days ago, "
                 f"refreshes every {common.INVENTORY_TTL_DAYS} days -> {inventory['_path']}",
             )
         except Exception as exc:

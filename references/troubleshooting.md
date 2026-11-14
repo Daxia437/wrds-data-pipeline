@@ -17,7 +17,7 @@ Access is per institution and changes over time, so the examples below describe 
 | `relation "csmar_trade..."` for other tables | same as above | run `discover.py --table <schema>.<table>` before building a spec |
 | CRSP data stops at 2024-12-31 across `dsf`, `msf`, `dsi`, `stocknames` | dataset not refreshed past that date | confirm subscription status; do not report it as a query bug |
 
-`db.list_tables(library=...)`, `db.describe_table()` and PostgreSQL privilege functions read metadata and can indicate access for tables that are not actually queryable. Always run `discover.py --table <schema>.<table>` before trusting a new table; its real-column `LIMIT 1` probe exposes denied or missing underlying relations without scanning the table. A library marked `ok` has passed one such probe, not a validation of all its tables.
+`db.list_tables(library=...)`, `db.describe_table()`, raw `information_schema` visibility, and `has_table_privilege()` on an outer view can indicate access for tables that are not actually queryable. WRDS's `list_libraries()` is different: it is an access-aware library list based on schema `USAGE` and friendly-view dependencies, so the snapshot uses it directly without querying every table. A library marked `ok` is authorized at the library level, not validated table by table. Always run `discover.py --table <schema>.<table>` before trusting a new table; its real-column `LIMIT 1` probe exposes denied or missing underlying relations without scanning the table.
 
 ## Local path
 

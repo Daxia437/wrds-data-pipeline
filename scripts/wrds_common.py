@@ -12,7 +12,6 @@ import os
 import re
 import sys
 import time
-from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -21,8 +20,11 @@ LOCAL_MAX_ROWS = 2_500_000
 SAMPLE_ROWS = 1000
 COUNT_TIMEOUT_MS = 20_000
 INVENTORY_TTL_DAYS = 90
-INVENTORY_VERSION = 2
-INVENTORY_METHOD = "live table probes of wrds.list_libraries(), samples excluded"
+INVENTORY_VERSION = 3
+INVENTORY_METHOD = (
+    "wrds.list_libraries() access metadata "
+    "(schema USAGE and view dependencies), samples excluded"
+)
 INVENTORY_NAME = ".wrds_inventory.json"
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -82,11 +84,10 @@ def connect():
 # --------------------------------------------------------------------------- #
 # subscription inventory
 #
-# Subscriptions differ by institution, so WRDS's product libraries are probed
-# with real queries once and cached for INVENTORY_TTL_DAYS. Catalog visibility
-# and privilege functions do not prove access: views may forward to schemas the
-# account cannot read. A successful library probe still does not prove every
-# table is intact; use `discover.py --table` before relying on a specific table.
+# wrds.list_libraries() is WRDS's access-aware product list, not raw catalog
+# visibility: it resolves schema USAGE and the relations behind friendly views.
+# Cache that library-level result. A standalone privilege check on an outer view
+# is not enough, and a specific table still needs discover.py --table verification.
 # --------------------------------------------------------------------------- #
 def inventory_candidates() -> list[Path]:
     override = os.environ.get("WRDS_INVENTORY")
@@ -142,85 +143,18 @@ _SAMPLE_LIBRARY = re.compile(r"samp|sample|smp|trial", re.IGNORECASE)
 
 
 def candidate_libraries(db) -> list[str]:
-    """WRDS's own product list, minus the sample/trial libraries everyone can see.
+    """WRDS-authorized product libraries, minus sample/trial libraries.
 
-    The PostgreSQL catalog is not a subscription signal: has_table_privilege()
-    returns true for tables in schemas the account cannot even USAGE, and some
-    libraries (ibes, optionm, boardex) are views forwarding to denied schemas.
-    Only a real query answers the question, so we probe this curated list.
+    Unlike information_schema or has_table_privilege() on an outer view,
+    list_libraries() is account-aware: WRDS checks schema USAGE and resolves
+    friendly views to their dependent product relations.
     """
     return sorted({name for name in db.list_libraries() if not _SAMPLE_LIBRARY.search(name)})
 
 
-def _classify_probe_error(exc: Exception) -> tuple[str, str]:
-    text = str(exc)
-    match = re.search(r"\((?:psycopg2|sqlalchemy)[^)]*\)[^\n]*", text)
-    detail = match.group(0)[:180] if match else text.splitlines()[0][:180]
-    if "permission denied" in text:
-        status = "denied"
-    elif "does not exist" in text:
-        status = "broken"
-    else:
-        status = "error"
-    return status, detail
-
-
-def probe_library(db, schema: str) -> dict:
-    """Find a queryable table; a denied module must not hide a usable library.
-
-    Large libraries mix products with separate subscriptions. For example, the
-    first CRSP view can require the unsubscribed index module while crsp.dsf is
-    available. Try every visible table until one succeeds; only classify the
-    whole library as unusable after every table has failed.
-    """
-    try:
-        columns = db.raw_sql(
-            """select table_name, column_name from information_schema.columns
-               where table_schema = %s
-               order by table_name, ordinal_position""",
-            params=(schema,),
-        ).drop_duplicates("table_name")
-    except Exception as exc:
-        status, detail = _classify_probe_error(exc)
-        return {"status": status, "detail": detail}
-    if columns.empty:
-        return {"status": "empty", "detail": "no table columns visible"}
-
-    failures: list[tuple[str, str, str]] = []
-    for row in columns.itertuples(index=False):
-        table, column = row.table_name, row.column_name
-        try:
-            db.raw_sql(f'select "{column}" from {schema}.{table} limit 1')
-            result = {"status": "ok", "table": table}
-            if failures:
-                result["attempts"] = len(failures) + 1
-            return result
-        except Exception as exc:
-            status, detail = _classify_probe_error(exc)
-            failures.append((status, detail, table))
-
-    # Prefer the most actionable diagnosis when different tables fail differently.
-    for status in ("denied", "broken", "error"):
-        failure = next((item for item in failures if item[0] == status), None)
-        if failure:
-            return {
-                "status": status,
-                "detail": failure[1],
-                "failed_table": failure[2],
-                "attempts": len(failures),
-            }
-    return {"status": "error", "detail": "probe did not run", "attempts": len(failures)}
-
-
-def build_inventory(db, user: str, quiet: bool = False) -> dict:
+def build_inventory(db, user: str) -> dict:
     started = time.monotonic()
-    candidates = candidate_libraries(db)
-    libraries: dict[str, dict] = {}
-    for index, schema in enumerate(candidates, start=1):
-        libraries[schema] = probe_library(db, schema)
-        if not quiet and index % 20 == 0:
-            print(f"[inventory] probed {index}/{len(candidates)} libraries", flush=True)
-    counts = Counter(entry["status"] for entry in libraries.values())
+    libraries = {schema: {"status": "ok"} for schema in candidate_libraries(db)}
     return {
         "version": INVENTORY_VERSION,
         "wrds_user": user,
@@ -229,7 +163,7 @@ def build_inventory(db, user: str, quiet: bool = False) -> dict:
         "build_seconds": round(time.monotonic() - started, 1),
         "method": INVENTORY_METHOD,
         "libraries": libraries,
-        "status_counts": dict(counts),
+        "status_counts": {"ok": len(libraries)},
         "gaps": {},
     }
 
@@ -251,11 +185,11 @@ def ensure_inventory(source=None, user: str = "", force: bool = False, quiet: bo
             return inventory
         reason = f"{age:.0f} days old"
     if not quiet:
-        print(f"[inventory] probing subscriptions ({reason}); this happens once per quarter", flush=True)
+        print(f"[inventory] reading WRDS authorization metadata ({reason}); refreshed quarterly", flush=True)
     own_connection = not hasattr(source, "list_libraries")
     db = connect() if own_connection else source
     try:
-        inventory = build_inventory(db, user, quiet=quiet)
+        inventory = build_inventory(db, user)
     finally:
         if own_connection:
             db.close()
@@ -273,8 +207,7 @@ def ensure_inventory(source=None, user: str = "", force: bool = False, quiet: bo
     if not quiet:
         counts = inventory.get("status_counts", {})
         print(
-            f"[inventory] {counts.get('ok', 0)} usable / {counts.get('denied', 0)} denied / "
-            f"{counts.get('broken', 0) + counts.get('error', 0)} broken libraries "
+            f"[inventory] {counts.get('ok', 0)} authorized libraries "
             f"in {inventory['build_seconds']}s -> {inventory['_path']}",
             flush=True,
         )

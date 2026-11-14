@@ -1,16 +1,16 @@
-"""List what a WRDS account can actually reach.
+"""List the libraries WRDS authorizes for this account.
 
 Subscriptions differ by institution, so nothing here assumes CRSP or Compustat
-is available. The first run tries real queries against visible tables in each
-non-sample WRDS product library and caches the result for 90 days; later runs
-reuse it and refresh automatically once it expires. A library-level success does
-not prove every table works: `--table` checks a specific table because WRDS metadata can list
-views whose underlying schema is not provisioned.
+is available. The snapshot reads WRDS's access-aware list_libraries() metadata,
+excludes sample libraries, and caches the result for 90 days; it does not query
+every table. Library-level authorization does not prove every table works:
+`--table` runs a real-column query because an individual view can still have a
+missing or denied underlying relation.
 
 Usage:
     python scripts/discover.py                  # cached subscription summary
     python scripts/discover.py --refresh        # rebuild the snapshot now
-    python scripts/discover.py --libraries      # every library and probe status
+    python scripts/discover.py --libraries      # every authorized library
     python scripts/discover.py --gaps           # tables that failed at run time
     python scripts/discover.py --schema ibes    # live table list for a schema
     python scripts/discover.py --table comp.funda
@@ -117,7 +117,7 @@ def _summary(db, force: bool) -> None:
     user, _ = common.credentials()
     inventory = common.ensure_inventory(db, user, force=force)
     libraries = inventory.get("libraries", {})
-    usable = sorted(name for name, entry in libraries.items() if entry.get("status") == "ok")
+    authorized = sorted(name for name, entry in libraries.items() if entry.get("status") == "ok")
     counts = inventory.get("status_counts", {})
     gaps = inventory.get("gaps") or {}
     age = common.inventory_age_days(inventory)
@@ -128,12 +128,12 @@ def _summary(db, force: bool) -> None:
     )
     print(f"cache     : {inventory['_path']}")
     print(f"method    : {inventory.get('method', 'n/a')}")
-    print(f"\nusable libraries ({len(usable)}, each verified with a real query):")
-    for i in range(0, len(usable), 4):
-        print("  " + "  ".join(f"{name:26s}" for name in usable[i:i + 4]))
+    print(f"\nauthorized libraries ({len(authorized)}, from WRDS access metadata):")
+    for i in range(0, len(authorized), 4):
+        print("  " + "  ".join(f"{name:26s}" for name in authorized[i:i + 4]))
     unavailable = {k: v for k, v in counts.items() if k != "ok"}
     if unavailable:
-        print(f"\nnot usable: {unavailable} — details with discover.py --libraries")
+        print(f"\nother statuses: {unavailable} — details with discover.py --libraries")
     if gaps:
         print(f"known gaps: {len(gaps)} tables failed at run time — discover.py --gaps")
     print("\nnext: discover.py --schema <name> | --table <schema>.<table> | --grep <text>")
@@ -143,10 +143,8 @@ def _libraries(db) -> None:
     user, _ = common.credentials()
     inventory = common.ensure_inventory(db, user, quiet=True)
     for name, entry in sorted(inventory.get("libraries", {}).items()):
-        detail = entry.get("table") or entry.get("detail", "")
-        if entry.get("attempts"):
-            detail += f" ({entry['attempts']} tables tried)"
-        print(f"{name:28s} {entry.get('status', '?'):8s} {detail}")
+        status = "authorized" if entry.get("status") == "ok" else entry.get("status", "?")
+        print(f"{name:28s} {status}")
 
 
 def _gaps(db) -> None:
@@ -161,13 +159,13 @@ def _gaps(db) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Probe WRDS access for this account.")
+    parser = argparse.ArgumentParser(description="Read WRDS authorization metadata for this account.")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--schema", help="list tables in this schema")
     action.add_argument("--table", help="list columns, and probe access, for schema.table")
     action.add_argument("--grep", help="search table names across schemas")
     action.add_argument("--gaps", action="store_true", help="tables that failed in earlier runs")
-    action.add_argument("--libraries", action="store_true", help="every probed library and its status")
+    action.add_argument("--libraries", action="store_true", help="every library in the access snapshot")
     action.add_argument("--live", action="store_true", help="table counts straight from the catalog")
     parser.add_argument("--refresh", action="store_true", help="rebuild the cached snapshot")
     args = parser.parse_args()

@@ -56,21 +56,21 @@ Measured on real data: one quarter of CRSP daily is ~620K rows / ~18 MB (local);
 
 ## Check what your account can reach
 
-Subscriptions differ by university, and metadata is not proof of access: WRDS lists some tables whose underlying schema is not provisioned, and permission-denied surfaces only when you query. The skill probes instead of assuming.
+Subscriptions differ by university. The skill distinguishes WRDS's access-aware library list from raw catalog metadata: `list_libraries()` is the library-level authorization signal, while an individual table still gets a live check because a view can point to a missing or denied underlying relation.
 
-On the **first connection**, the skill takes WRDS's own `list_libraries()` account-visible product list, excludes sample/trial libraries, and runs real column queries across each remaining library's visible tables until one succeeds. A library is marked unusable only after all its visible tables fail, so an unsubscribed module cannot hide another usable module in the same library. It caches each result as `ok`, `denied`, `broken`, `error`, or `empty`, and refreshes the snapshot automatically after **90 days** — so subscription changes are picked up without anyone maintaining a hard-coded list. Catalog visibility and PostgreSQL privilege functions are deliberately not treated as proof of access. Failures learned during use (a specific table that turns out not to be queryable) are recorded and surfaced on the next run, and survive snapshot rebuilds.
+On the **first connection**, the skill reads WRDS's own `list_libraries()` authorization list, excludes sample/trial libraries, and caches each library as `ok`. It does **not** query tables to build this snapshot. WRDS's list applies schema `USAGE` privileges and resolves friendly views to their dependent product relations; those views check `SELECT` on the underlying tables. This avoids the false positives from checking only an outer view's ACL. The snapshot refreshes automatically after **90 days**, so subscription changes are picked up without a hard-coded product list. Failures learned during use (a specific table that turns out not to be queryable) are recorded and surfaced on the next run, and survive snapshot rebuilds.
 
 ```bash
-python <skill>/scripts/discover.py                             # usable libraries + status counts
+python <skill>/scripts/discover.py                             # authorized libraries + status counts
 python <skill>/scripts/discover.py --refresh                   # rebuild now
-python <skill>/scripts/discover.py --libraries                 # every probe result and error
+python <skill>/scripts/discover.py --libraries                 # every authorized library
 python <skill>/scripts/discover.py --gaps                      # tables that failed at run time
 python <skill>/scripts/discover.py --schema ibes               # tables in a library
 python <skill>/scripts/discover.py --table comp.funda          # columns + live access probe
 python <skill>/scripts/discover.py --grep linktable            # find link tables by name
 ```
 
-The library snapshot is a coverage signal, not a guarantee that every table in an `ok` library works: `ok` means at least one real table query succeeded. Run `--table` before relying on a specific table. It prints `access: queryable` or the actual failure, e.g. `permission denied for schema crsp_a_ccm` for the CCM link table. Ask in plain language — "what IBES data do we have?" — and the agent runs this before writing SQL. `plan.py` reuses the snapshot, so a spec that targets a library or table known to be unusable gets a warning before the size estimate.
+The library snapshot is a coverage signal, not a guarantee that every table in an `ok` library works: `ok` means WRDS included the library in this account's access-aware list, not that a table query succeeded. Run `--table` before relying on a specific table. It prints `access: queryable` or the actual failure, e.g. `permission denied for schema crsp_a_ccm` for the CCM link table. Ask in plain language — "what IBES data do we have?" — and the agent runs this before writing SQL. `plan.py` reuses the snapshot, so a spec that targets a library outside the authorization list, or a table with a known gap, gets a warning before the size estimate.
 
 The cache lives in `~/.wrds_inventory.json`, falls back to the project directory when home is not writable, and can be relocated with `WRDS_INVENTORY`. It is per WRDS user; switching accounts triggers a rebuild.
 
@@ -129,7 +129,7 @@ platforms/
 └── chatgpt-instructions.md paste-ready instructions for ChatGPT
 scripts/
 ├── wrds_common.py          env loading, SQL assembly, date normalisation, manifests
-├── discover.py             what the account can actually reach, with a live probe
+├── discover.py             library authorization metadata + live table checks
 ├── check_env.py            one-time access check for both paths
 ├── plan.py                 size estimate and local/cloud decision
 ├── run_local.py            local execution to parquet
