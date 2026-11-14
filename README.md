@@ -39,7 +39,7 @@ Python side needs `pip install wrds pandas pyarrow paramiko`. The agent can inst
 
 ## Why this skill exists
 
-Replication work keeps hitting the same loop: pull data from whatever WRDS library the paper uses, use it, repeat with a different window or filter. Hand-rolled scripts break in the same three places:
+Empirical research keeps hitting the same loop: pull data from whatever WRDS library the project needs, use it, repeat with a different window or filter. Hand-rolled scripts break in the same three places:
 
 - A "quick" query returns 6 GB and chokes a laptop, so it has to be rewritten as a cloud job with SAS upload/download plumbing.
 - A cloud job sits in the SGE queue for minutes, which is the wrong tool for a 40 MB annual file.

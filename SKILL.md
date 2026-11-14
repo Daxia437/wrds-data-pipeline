@@ -1,11 +1,11 @@
 ---
 name: wrds-data-pipeline
-description: Fetch WRDS data for a project or paper, routing big pulls to WRDS Cloud jobs and small pulls to local parquet. Table-agnostic — works with any library the account subscribes to (CRSP, Compustat, CSMAR, IBES, Thomson, Ravenpack, …). Use scripts/discover.py to find what is actually reachable. Do not use for non-WRDS data sources.
+description: Fetch WRDS data for any empirical research project, routing big pulls to WRDS Cloud jobs and small pulls to local parquet. Table-agnostic — works with any library the account subscribes to (CRSP, Compustat, CSMAR, IBES, Thomson, Ravenpack, …). Use scripts/discover.py to find what is actually reachable. Do not use for non-WRDS data sources.
 ---
 
 # WRDS Data Pipeline
 
-Turn a data requirement (project step or paper replication) into either a local parquet extract or a WRDS Cloud job, then hand reproducible files back to the analysis code.
+Turn a data requirement from any empirical research project into either a local parquet extract or a WRDS Cloud job, then hand reproducible files back to the analysis code.
 
 ## Workflow
 

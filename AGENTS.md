@@ -5,7 +5,7 @@ This file is a pointer for agents that read project instructions (`AGENTS.md`) i
 ```markdown
 ## WRDS data
 
-When the task involves WRDS extracts, replication datasets, or data from any WRDS library (CRSP, Compustat, CSMAR, IBES, Thomson, … — availability depends on the account):
+When the task involves WRDS extracts or data from any WRDS library (CRSP, Compustat, CSMAR, IBES, Thomson, … — availability depends on the account):
 
 1. Read `<path-to-skill>/SKILL.md` and follow it as the procedure.
 2. Run its scripts by absolute path, keeping the analysis project as the working directory:
