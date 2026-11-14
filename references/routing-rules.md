@@ -1,6 +1,6 @@
 # Routing rules
 
-`plan.py` sizes every table, then compares the totals against the local limits.
+`plan.py` sizes every table, then compares the totals against the local limits. The rules are library-agnostic — the CRSP and Compustat figures below are calibration examples, not a whitelist. Cost scales with rows and bytes, not with which vendor supplies them.
 
 ## How size is estimated
 

@@ -1,6 +1,6 @@
 # WRDS Data Pipeline Skill
 
-An agent skill that turns a WRDS data request into either a **local parquet extract** or a **WRDS Cloud job**, choosing automatically from the size of the result. Works with WorkBuddy, Trae, Claude Code, Codex, Cursor and any agent that can read a skill folder or an `AGENTS.md`.
+An agent skill that turns a WRDS data request into either a **local parquet extract** or a **WRDS Cloud job**, choosing automatically from the size of the result. It is table-agnostic: it works with whatever libraries your institution subscribes to, and ships a discovery script so the agent checks access instead of assuming CRSP or Compustat is there. Works with WorkBuddy, Trae, Claude Code, Codex, Cursor and any agent that can read a skill folder or an `AGENTS.md`.
 
 ## Install with your agent
 
@@ -37,13 +37,13 @@ Python side needs `pip install wrds pandas pyarrow paramiko`. The agent can inst
 
 ## Why this skill exists
 
-Replication work keeps hitting the same loop: pull CRSP/Compustat/CSMAR data, use it, repeat with a different window or filter. Hand-rolled scripts break in the same three places:
+Replication work keeps hitting the same loop: pull data from whatever WRDS library the paper uses, use it, repeat with a different window or filter. Hand-rolled scripts break in the same three places:
 
 - A "quick" query returns 6 GB and chokes a laptop, so it has to be rewritten as a cloud job with SAS upload/download plumbing.
 - A cloud job sits in the SGE queue for minutes, which is the wrong tool for a 40 MB annual file.
 - Every script invents its own folder layout, column order and manifest, so nobody can tell which extract produced which result.
 
-The skill removes that decision from whoever writes the extraction: it sizes the result, picks the path, and guarantees the same output contract either way.
+The skill removes that decision from whoever writes the extraction: it sizes the result, picks the path, and guarantees the same output contract either way. It does not carry a fixed list of approved datasets — access is a property of the account, not of the skill, and it is checked at run time.
 
 ## What it does
 
@@ -54,17 +54,31 @@ The skill removes that decision from whoever writes the extraction: it sizes the
 
 Measured on real data: one quarter of CRSP daily is ~620K rows / ~18 MB (local); full CRSP history is ~99.5M rows / ~1.5 GB (cloud, 21–103 s of queue wait, seconds of compute).
 
+## Check what your account can reach
+
+Subscriptions differ by university, and metadata is not proof of access: WRDS lists some tables whose underlying schema is not provisioned, and permission-denied surfaces only when you query. The skill probes instead of assuming.
+
+```bash
+python <skill>/scripts/discover.py                             # schemas and table counts
+python <skill>/scripts/discover.py --schema ibes               # tables in a library
+python <skill>/scripts/discover.py --table comp.funda          # columns + live access probe
+python <skill>/scripts/discover.py --grep linktable            # find link tables by name
+```
+
+`--table` prints `access: queryable` or the actual failure, e.g. `permission denied for schema crsp_a_ccm` for the CCM link table. Ask in plain language — "what IBES data do we have?" — and the agent runs this before writing SQL.
+
 ## Use it
 
 Just ask, in whatever words fit the task:
 
 - "Pull CRSP daily returns for 2024 Q4 and Compustat fundamentals for FY2023 into `data/`."
 - "I'm replicating Table 2 of this paper — get me the monthly CRSP panel, 1990–2023."
-- "Check whether we have access to the CRSP–Compustat link table."
+- "Do we have IBES analyst coverage, and which tables are actually queryable?"
 
 The skill picks the route, writes the spec, runs it and reports the manifest. The CLI is available when you want to drive it yourself:
 
 ```bash
+python <skill>/scripts/discover.py --table <schema>.<table>
 python <skill>/scripts/plan.py --spec spec.json
 python <skill>/scripts/run_local.py --spec spec.json
 python <skill>/scripts/run_cloud.py submit --spec spec.json --wait
@@ -90,9 +104,10 @@ Date-like columns arrive as `datetime64[ns]` on both routes, so a local and a cl
 
 ## Scope and known limits
 
-- Verified against CRSP, Compustat and CSMAR availability as of 2026-11. CRSP on the verified account ends 2024-12-31 — a subscription boundary, not a query limitation.
-- `crsp.ccmxpf_linktable` needs a separate CCM subscription; without it, link on `permno` + `gvkey` manually.
-- Some CSMAR tables (`trd_dalyr`, `trd_cndalym`, `trd_cale`) appear in metadata but are not provisioned. Run `count(*)` before trusting a new table.
+- **No fixed dataset list.** Any library the account can query works: CRSP, Compustat (North America and Global), CSMAR, IBES, Thomson Reuters, board/exposure/audit products, WRDS apps. What differs between universities is the subscription, so `discover.py` is the source of truth rather than this README.
+- The CCM link table (`crsp.ccmxpf_linktable`) requires a separate subscription that many accounts lack. When it is missing, bridge `permno` and `gvkey` yourself or use another link product.
+- Some CSMAR tables (`trd_dalyr`, `trd_cndalym`, `trd_cale`) appear in metadata while `csmar_trade` is not provisioned — the exact trap `discover.py --table` exists to catch. Run it before trusting any new table.
+- Data end dates follow the subscription: on the verified account CRSP stops at 2024-12-31, Compustat at 2026-09-30. Absence of recent rows is usually the subscription, not the query.
 - Cloud queue waits of tens of seconds to several minutes are normal at the institutional level.
 - WRDS only. Not for non-WRDS sources.
 
@@ -107,6 +122,7 @@ platforms/
 └── chatgpt-instructions.md paste-ready instructions for ChatGPT
 scripts/
 ├── wrds_common.py          env loading, SQL assembly, date normalisation, manifests
+├── discover.py             what the account can actually reach, with a live probe
 ├── check_env.py            one-time access check for both paths
 ├── plan.py                 size estimate and local/cloud decision
 ├── run_local.py            local execution to parquet

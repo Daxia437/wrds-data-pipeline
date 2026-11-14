@@ -4,6 +4,8 @@ Read the failing SQL and the first error line before changing code.
 
 ## Permission and coverage
 
+Access is per institution and changes over time, so the examples below describe one verified account rather than WRDS in general. Confirm any table before writing SQL: `python scripts/discover.py --table <schema>.<table>` runs a live probe and reports the real error.
+
 | symptom | cause | action |
 |---|---|---|
 | `permission denied for schema crsp_a_ccm` on `crsp.ccmxpf_linktable` / `lnkhist` | CRSP-Compustat link is a separate subscription | request CCM access, or link manually on `permno`+`gvkey` with your own crosswalk |

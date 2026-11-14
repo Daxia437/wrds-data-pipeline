@@ -1,6 +1,6 @@
 ---
 name: wrds-data-pipeline
-description: Fetch WRDS data for a project or paper, routing big pulls to WRDS Cloud jobs and small pulls to local parquet. Use for CRSP, Compustat, CSMAR extracts and replication datasets. Do not use for non-WRDS data sources.
+description: Fetch WRDS data for a project or paper, routing big pulls to WRDS Cloud jobs and small pulls to local parquet. Table-agnostic: works with any library the account subscribes to (CRSP, Compustat, CSMAR, IBES, Thomson, Ravenpack, …). Use scripts/discover.py to find what is actually reachable. Do not use for non-WRDS data sources.
 ---
 
 # WRDS Data Pipeline
@@ -10,13 +10,14 @@ Turn a data requirement (project step or paper replication) into either a local 
 ## Workflow
 
 1. **Write a spec** — copy `assets/spec.example.json` and fill `job` + `tables`. Each table is either raw `sql` or `library`/`table`/`columns`/`where`.
-2. **Verify access once per machine** — `python scripts/check_env.py`. It checks local credentials, the PostgreSQL endpoint, the cloud SSH login, the cloud Python stack and the cloud `~/.pgpass`.
-3. **Let the router decide** — `python scripts/plan.py --spec spec.json`. It estimates rows and download bytes per table, then prints the route (`local` or `cloud`) with reasons.
-4. **Run the chosen path**:
+2. **Confirm access for unfamiliar libraries** — `python scripts/discover.py` lists reachable schemas; `--schema <name>` lists tables, `--table <schema>.<table>` lists columns and probes whether the table really answers. Subscriptions vary by institution, so run this before writing SQL against a library you have not used on this account.
+3. **Verify access once per machine** — `python scripts/check_env.py`. It checks local credentials, the PostgreSQL endpoint, the cloud SSH login, the cloud Python stack and the cloud `~/.pgpass`.
+4. **Let the router decide** — `python scripts/plan.py --spec spec.json`. It estimates rows and download bytes per table, then prints the route (`local` or `cloud`) with reasons.
+5. **Run the chosen path**:
    - local: `python scripts/run_local.py --spec spec.json`
    - cloud: `python scripts/run_cloud.py submit --spec spec.json --wait`
-5. **Consume `data/<job>/manifest.json`** in the analysis code. Never hard-code column order or row counts; read both from the manifest.
-6. **Inspect cloud jobs** with `run_cloud.py status --job <job>` and fetch results with `run_cloud.py pull --job <job>`.
+6. **Consume `data/<job>/manifest.json`** in the analysis code. Never hard-code column order or row counts; read both from the manifest.
+7. **Inspect cloud jobs** with `run_cloud.py status --job <job>` and fetch results with `run_cloud.py pull --job <job>`.
 
 Override routing only when you have a reason the estimator cannot see: `plan.py --route cloud` or `run_local.py --force`.
 
@@ -51,6 +52,10 @@ Cloud scripts handed to `--script` must write into `out/` themselves and must ca
 ## Commands
 
 ```bash
+python scripts/discover.py                                   # reachable schemas
+python scripts/discover.py --schema comp                     # tables in a schema
+python scripts/discover.py --table comp.funda                # columns + access probe
+python scripts/discover.py --grep linktable                  # search table names
 python scripts/check_env.py                                  # one-time access check
 python scripts/plan.py --spec spec.json [--route local|cloud] [--json]
 python scripts/run_local.py --spec spec.json [--force] [--chunk 500000]
@@ -68,3 +73,4 @@ python scripts/run_cloud.py clean --job <job>
 - Always delete `*.parquet` / `*.csv` derivatives from the skill directory; they belong under `data/` or the project's own data folder.
 - Prefer one spec per analysis step over one giant spec, so a failed table does not force a re-download.
 - Check `references/troubleshooting.md` before debugging a failure; permission-denied and missing-schema errors are usually subscription issues, not code bugs.
+- Never assume a library or table exists. Subscriptions differ by institution and by year — probe with `discover.py --table` first, and treat `NOT queryable` as a fact about the account, not something to work around by editing SQL.
