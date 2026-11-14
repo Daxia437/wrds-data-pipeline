@@ -92,9 +92,10 @@ def connect():
 def inventory_candidates() -> list[Path]:
     override = os.environ.get("WRDS_INVENTORY")
     if override:
+        # Optional override only; expanduser keeps "~/..." portable across OSes.
         return [Path(override).expanduser()]
-    # Home first so every project shares one cache; the project directory is the
-    # fallback for locked-down machines and sandboxes.
+    # Home is shared automatically by projects and agent apps under one OS user.
+    # The project directory is only a fallback for locked-down home directories.
     return [Path.home() / INVENTORY_NAME, Path.cwd() / INVENTORY_NAME]
 
 

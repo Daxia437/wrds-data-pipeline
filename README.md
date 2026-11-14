@@ -72,7 +72,7 @@ python <skill>/scripts/discover.py --grep linktable            # find link table
 
 The library snapshot is a coverage signal, not a guarantee that every table in an `ok` library works: `ok` means WRDS included the library in this account's access-aware list, not that a table query succeeded. Run `--table` before relying on a specific table. It prints `access: queryable` or the actual failure, e.g. `permission denied for schema crsp_a_ccm` for the CCM link table. Ask in plain language — "what IBES data do we have?" — and the agent runs this before writing SQL. `plan.py` reuses the snapshot, so a spec that targets a library outside the authorization list, or a table with a known gap, gets a warning before the size estimate.
 
-The cache lives in `~/.wrds_inventory.json`, falls back to the project directory when home is not writable, and can be relocated with `WRDS_INVENTORY`. It is per WRDS user; switching accounts triggers a rebuild.
+The cache defaults to `Path.home() / ".wrds_inventory.json"` (that is, `~/.wrds_inventory.json`). Projects and agent apps running under the same OS user therefore share it automatically on Windows, macOS and Linux — no hard-coded absolute path, environment variable or per-session setup is needed. The project directory is only a fallback when the home directory is not writable. `WRDS_INVENTORY` is an optional override for sandboxes and other special setups, and a value such as `~/.wrds_inventory.json` is expanded portably. The snapshot is per WRDS user; switching accounts triggers a rebuild. Different OS users and different machines do not share it automatically.
 
 ## Use it
 
