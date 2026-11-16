@@ -163,10 +163,16 @@ def _job_exit_code(ssh, remote_dir: str) -> int | None:
         return None
 
 
-def _classify_status(tables: list, errors: list) -> str:
-    if not errors:
+def _classify_status(tables: list, errors: list, exit_code: int | None = None) -> str:
+    """Classify a cloud job from its SGE exit code and manifest contents.
+
+    - SUCCESS: exit code 0, at least one table output, no table errors.
+    - PARTIAL_SUCCESS: at least one table landed, but some tables errored.
+    - FAILED: non-zero exit code, no outputs, or unverifiable execution.
+    """
+    if exit_code == 0 and not errors and tables:
         return "SUCCESS"
-    if tables:
+    if errors and tables:
         return "PARTIAL_SUCCESS"
     return "FAILED"
 
@@ -315,7 +321,7 @@ def _pull(ssh, state: dict, max_mb: float, only: list[str] | None) -> None:
         tables_meta = manifest.get("tables", [])
         errors = manifest.get("errors", [])
         exit_code = _job_exit_code(ssh, state["remote_dir"])
-        status = _classify_status(tables_meta, errors)
+        status = _classify_status(tables_meta, errors, exit_code)
         print(
             f"job status: {status} "
             f"(exit {exit_code if exit_code is not None else 'unknown'}, "

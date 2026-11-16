@@ -4,25 +4,15 @@ An agent skill that turns a WRDS data request into either a **local parquet extr
 
 ## Install with your agent
 
-Paste this into your agent. It clones the repo into the right skills directory, then verifies the setup:
+Paste this into your agent. It points the agent at the platform-specific install guide, then verifies the setup:
 
 ```text
 Install the skill at https://github.com/Daxia437/wrds-data-pipeline
 
-Clone it into your skills directory, keep the folder name wrds-data-pipeline, and confirm SKILL.md is readable there. Then run scripts/check_env.py from my project root and report what passes. Do not create or print any credentials.
+Read INSTALL.md and follow the installation method that matches your agent and platform — a skills directory, an AGENTS.md pointer, or pasted instructions, whichever applies. Keep the folder name wrds-data-pipeline, then run scripts/check_env.py from my project root and report what passes. Do not create or print any credentials.
 ```
 
-If the agent asks where to put it:
-
-| Agent | Skills directory |
-|---|---|
-| WorkBuddy | `~/.workbuddy/skills/` |
-| Trae | `~/.trae-cn/skills/` (CN) or `~/.trae/skills/` |
-| Claude Code | `~/.claude/skills/` |
-| Codex / Cursor | no skill dir — add `AGENTS.md` from this repo to the project root and point it at the clone |
-| ChatGPT | no filesystem — paste [`platforms/chatgpt-instructions.md`](platforms/chatgpt-instructions.md) into a Project or custom GPT |
-
-Start a new session after installing so the skill is picked up. Manual installation, per-platform detail and troubleshooting: [`INSTALL.md`](INSTALL.md).
+Installation differs by agent: some read a skill folder, some read an `AGENTS.md` pointer, and ChatGPT (which has no filesystem) uses [`platforms/chatgpt-instructions.md`](platforms/chatgpt-instructions.md) pasted into a Project or custom GPT. The agent picks whichever method applies; the full per-platform steps are in [`INSTALL.md`](INSTALL.md). Start a new session after installing so the skill is picked up.
 
 ### Then give it credentials
 
