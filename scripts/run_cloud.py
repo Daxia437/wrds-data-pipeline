@@ -340,15 +340,14 @@ def _pull(ssh, state: dict, max_mb: float, only: list[str] | None) -> None:
                 f"manifest downloaded; rerun with --tables {','.join(t['name'] for t in wanted[:2])} "
                 "or raise --max-mb"
             )
-            return
-
-        for table in wanted:
-            filename = f"{table['name']}.parquet"
-            if filename not in sizes:
-                print(f"missing on remote: {filename}")
-                continue
-            sftp.get(f"{remote_data_dir}/{filename}", str(local_dir / filename))
-            print(f"pulled {filename} ({common.human_bytes(sizes[filename])})")
+        else:
+            for table in wanted:
+                filename = f"{table['name']}.parquet"
+                if filename not in sizes:
+                    print(f"missing on remote: {filename}")
+                    continue
+                sftp.get(f"{remote_data_dir}/{filename}", str(local_dir / filename))
+                print(f"pulled {filename} ({common.human_bytes(sizes[filename])})")
     finally:
         sftp.close()
 
