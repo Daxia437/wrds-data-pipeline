@@ -44,7 +44,7 @@ Python side needs `pip install wrds pandas pyarrow paramiko`. The agent can inst
 
 ## Example: end-to-end research task
 
-[`examples/us_st_reversal/`](examples/us_st_reversal/) runs the classic short-term reversal question through the whole pipeline: a cloud spec that aggregates `crsp.dsf` into a monthly panel, and a local analysis script that sorts deciles, forms D1−D10, and reports a time-series t-test. Reproducing it takes two commands and exercises discovery, routing, cloud submission, pull and the manifest contract.
+[`examples/us_st_reversal/`](examples/us_st_reversal/) runs the classic short-term reversal question through the whole pipeline: a cloud spec that aggregates `crsp.dsf` into a monthly panel, and a local analysis script that sorts deciles, forms D1−D10, and reports a time-series t-test. Reproducing it takes two commands. The spec pins `route: cloud` (a ten-year panel), so it exercises the cloud path — submission, queue wait, pull and the manifest contract — rather than automatic routing.
 
 ## Why this skill exists
 
@@ -59,11 +59,11 @@ The skill removes that decision from whoever writes the extraction: it sizes the
 ## What it does
 
 1. **Sizes the extract** — bounded `count(*)`, catalog-statistics fallback, and a 1,000-row sample to estimate compressed parquet bytes.
-2. **Routes it** — under 250 MB and 2.5M rows stays local; anything larger, or unmeasurable, goes to the cloud.
+2. **Routes it** — under 250 MB and 2.5M rows summed across the whole job stays local; anything larger, or unmeasurable, goes to the cloud.
 3. **Runs it** — writes parquet locally, or uploads a spec plus extractor to WRDS Cloud and submits an SGE job.
 4. **Hands off reproducibly** — both paths emit `manifest.json` (rows, bytes, columns, dtypes, sha256, exact SQL) and `provenance.json`.
 
-Measured on real data: one quarter of CRSP daily is ~620K rows / ~18 MB (local); full CRSP history is ~99.5M rows / ~1.5 GB (cloud, 21–103 s of queue wait, seconds of compute).
+Measured on this account: one quarter of CRSP daily (`permno, date, prc, ret, vol, shrout`) is ~620K rows / ~10 MB parquet, comfortably local; a full year is ~2.4M rows / ~39 MB, just under the local limits. Full CRSP history is not measurable from catalog statistics (a view), so it routes to the cloud.
 
 ## Check what your account can reach
 
@@ -119,6 +119,8 @@ data/<job>/
 Cloud runs keep the remote copy under `<remote_root>/<job>/` with `job.log`, `spec.json`, the uploaded script and `out/manifest.json`. `remote_root` defaults to `~/wrds_jobs` on the cloud host, so code, logs and results keep working when scratch is full or unprovisioned; pin it with `--remote-root` or `WRDS_CLOUD_ROOT`. Large parquet outputs can be redirected with `--scratch-dir /scratch/<institution>/<user>/wrds_jobs` (or `WRDS_CLOUD_SCRATCH`); metadata and logs always stay under `remote_root`.
 
 Date-like columns arrive as `datetime64[ns]` on both routes, so a local and a cloud extract of the same query are identical in content.
+
+Traceability is not the same as full reproducibility. The manifest and provenance record the exact SQL, columns, dtypes, row counts, SHA-256 and script fingerprint, so an extract can be traced to its source and byte-verified. Repeating a whole study additionally needs the analysis code, its environment and dependencies, and the random seed — the skill guarantees the data contract; the analysis code remains yours to version.
 
 ## Scope and known limits
 

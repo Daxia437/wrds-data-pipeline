@@ -65,6 +65,22 @@ def sha256_file(path: str) -> str:
     return digest.hexdigest()
 
 
+def _script_sha256() -> str | None:
+    try:
+        return sha256_file(__file__)
+    except OSError:
+        return None
+
+
+def _package_version(name: str) -> str | None:
+    try:
+        from importlib import metadata
+
+        return metadata.version(name)
+    except Exception:
+        return None
+
+
 def main() -> int:
     import pandas as pd
     import wrds
@@ -117,6 +133,12 @@ def main() -> int:
         "host": platform.node(),
         "python": platform.python_version(),
         "pandas": pd.__version__,
+        "wrds": _package_version("wrds"),
+        "script": {
+            "script": os.path.basename(__file__),
+            "script_sha256": _script_sha256(),
+            "git_commit": None,
+        },
         "tables": tables,
         "errors": errors,
     }

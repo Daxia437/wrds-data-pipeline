@@ -48,11 +48,11 @@ SQL must be read-only. Do not add a trailing semicolon; it is stripped anyway.
 }
 ```
 
-Cloud jobs produce the same fields (`wrds_user`, per-table `sha256` and `dtypes`) and add `host`, `python`, `pandas`, `elapsed_sec` per table and an `errors` list. A non-empty `errors` list means some tables failed but others still landed; read `errors` before trusting the job. Date columns are cast to `datetime64[ns]` on both routes, so a local and a cloud extract of the same query are identical in content.
+Cloud jobs produce the same fields (`wrds_user`, per-table `sha256` and `dtypes`) and add `host`, `python`, `pandas`, `elapsed_sec` per table and an `errors` list. A non-empty `errors` list means some tables failed but others still landed; read `errors` before trusting the job. A cloud pull classifies the outcome as `SUCCESS` (no errors), `PARTIAL_SUCCESS` (some tables landed, others errored) or `FAILED` (errors and no tables), and records it in `provenance.json` so a failed job is never mistaken for success. Date columns are cast to `datetime64[ns]` on both routes, so a local and a cloud extract of the same query are identical in content.
 
 ## data/<job>/provenance.json
 
-Local runs record the full spec, interpreter versions and output directory. Cloud pulls record `job_id`, `remote_dir`, `submitted_utc` and the download time.
+Local runs record the full spec, interpreter and dependency versions (`python`, `pandas`, `wrds`), the executing script's `sha256`, the skill repo `git_commit` when available, and the output directory. Cloud pulls record `job_id`, `remote_dir`, `submitted_utc`, the download time, and the outcome (`status`, `exit_code`, `errors`). Fields that cannot be determined stay `null` and are never fabricated.
 
 ## Subscription inventory (`.wrds_inventory.json`)
 
@@ -101,7 +101,7 @@ Each non-sample/trial library returned by WRDS's access-aware `wrds.list_librari
 
 ## Custom cloud scripts
 
-`--script my.py` uploads the file and runs it instead of `run_remote.py`. Requirements:
+A custom script is set with either the spec `script` field or `run_cloud.py submit --script my.py`; the CLI flag overrides the spec field. The file is uploaded as `user_script.py` and run instead of `run_remote.py`. `submit` verifies the file exists and fails immediately on an unrecognized path — it never silently falls back to the generic extractor. Requirements:
 
 - `cd` is already the remote job directory; write metadata into `out/` and large parquet into `$WRDS_DATA_DIR` when it is set.
 - Call `wrds.Connection()` with no arguments. `submit` provisions `~/.pgpass` (mode 600) from `.env` when it is missing.

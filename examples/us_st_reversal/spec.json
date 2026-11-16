@@ -5,7 +5,7 @@
   "tables": [
     {
       "name": "crsp_monthly",
-      "sql": "select permno, date_trunc('month', date)::date as month, exp(sum(ln(1 + ret))) - 1 as ret_m, count(*) as n_days, avg(abs(prc)) as avg_prc, avg(shrout) as avg_shrout from crsp.dsf where date between '2015-01-01' and '2024-12-31' and ret is not null and ret > -1 and hexcd in (1, 2, 3) group by permno, date_trunc('month', date)"
+      "sql": "with monthly as (select permno, date_trunc('month', date)::date as month, count(*) as n_days, avg(abs(prc)) as avg_prc, avg(shrout) as avg_shrout, exp(sum(ln(1 + ret::float8))) - 1 as ret_m from crsp.dsf where date between '2015-01-01' and '2024-12-31' and ret is not null and ret >= -1 group by permno, date_trunc('month', date)), names as (select permno, shrcd, exchcd, namedt, nameendt from crsp.dsenames where shrcd in (10, 11) and exchcd in (1, 2, 3)), delist as (select permno, date_trunc('month', dlstdt)::date as month, dlret from crsp.dsedelist where dlret is not null) select m.permno, m.month, m.n_days, m.avg_prc, m.avg_shrout, m.ret_m, n.shrcd, n.exchcd, d.dlret from monthly m join names n on m.permno = n.permno and n.namedt <= m.month and m.month <= coalesce(n.nameendt, m.month) left join delist d on m.permno = d.permno and m.month = d.month"
     }
   ]
 }

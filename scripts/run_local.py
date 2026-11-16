@@ -47,6 +47,7 @@ def main() -> None:
     db = common.connect()
     user, _ = common.credentials()
     manifest_tables = []
+    errors = []
 
     try:
         for table in spec["tables"]:
@@ -55,30 +56,33 @@ def main() -> None:
             print(f"[{name}] querying ...", flush=True)
             try:
                 frame = db.raw_sql(sql, chunksize=args.chunk)
+                frame = common.normalize_dates(frame)
+                path = out_dir / f"{name}.parquet"
+                frame.to_parquet(path, index=False, compression="snappy")
+                manifest_tables.append(
+                    {
+                        "name": name,
+                        "file": path.name,
+                        "rows": int(len(frame)),
+                        "bytes": path.stat().st_size,
+                        "sha256": common.sha256_file(path),
+                        "columns": list(frame.columns),
+                        "dtypes": {c: str(t) for c, t in frame.dtypes.items()},
+                        "sql": sql,
+                    }
+                )
+                print(
+                    f"[{name}] {len(frame):,} rows -> {path.name} "
+                    f"({common.human_bytes(path.stat().st_size)})"
+                )
             except Exception as exc:
                 ref = common.parse_libref(sql)
                 if ref:
                     common.learn_gap(user, f"{ref[0]}.{ref[1]}", str(exc))
-                raise
-            frame = common.normalize_dates(frame)
-            path = out_dir / f"{name}.parquet"
-            frame.to_parquet(path, index=False, compression="snappy")
-            manifest_tables.append(
-                {
-                    "name": name,
-                    "file": path.name,
-                    "rows": int(len(frame)),
-                    "bytes": path.stat().st_size,
-                    "sha256": common.sha256_file(path),
-                    "columns": list(frame.columns),
-                    "dtypes": {c: str(t) for c, t in frame.dtypes.items()},
-                    "sql": sql,
-                }
-            )
-            print(
-                f"[{name}] {len(frame):,} rows -> {path.name} "
-                f"({common.human_bytes(path.stat().st_size)})"
-            )
+                errors.append(
+                    {"name": name, "sql": sql, "error": str(exc).splitlines()[0][:300]}
+                )
+                print(f"[{name}] FAILED {exc}", flush=True)
     finally:
         db.close()
 
@@ -89,6 +93,7 @@ def main() -> None:
         "created_utc": created,
         "wrds_user": user,
         "tables": manifest_tables,
+        "errors": errors,
     }
     provenance = {
         "created_utc": created,
@@ -98,6 +103,8 @@ def main() -> None:
         "spec": spec,
         "python": platform.python_version(),
         "pandas": pd.__version__,
+        "wrds": common.package_version("wrds"),
+        "script": common.script_fingerprint(common.SCRIPTS_DIR / "run_local.py"),
         "output_dir": str(out_dir),
     }
     common.write_json(out_dir / "manifest.json", manifest)

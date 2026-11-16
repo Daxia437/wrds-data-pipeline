@@ -335,6 +335,40 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def package_version(name: str) -> str | None:
+    try:
+        from importlib import metadata
+
+        return metadata.version(name)
+    except Exception:
+        return None
+
+
+def script_fingerprint(script: Path | None = None) -> dict:
+    """Provenance for the executing script: its sha256 and the skill repo's
+    git commit when available. Missing values stay ``null`` and are never
+    fabricated."""
+    info: dict = {"script": None, "script_sha256": None, "git_commit": None}
+    if script is not None:
+        info["script"] = script.name
+        if script.is_file():
+            info["script_sha256"] = sha256_file(script)
+    try:
+        import subprocess
+
+        result = subprocess.run(
+            ["git", "-C", str(SKILL_DIR), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            info["git_commit"] = result.stdout.strip()
+    except Exception:
+        pass
+    return info
+
+
 def human_bytes(num: float) -> str:
     for unit in ["B", "KB", "MB", "GB", "TB"]:
         if abs(num) < 1024 or unit == "TB":

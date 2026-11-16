@@ -112,13 +112,16 @@ def estimate_table(conn, table: dict, timeout_ms: int, sample_rows: int) -> dict
 def decide(tables: list[dict], route_override: str, max_mb: float, max_rows: int) -> dict:
     reasons: list[str] = []
     if route_override in {"local", "cloud"}:
-        if route_override == "local":
-            reasons.append("route forced to local by caller")
-        else:
-            reasons.append("route forced to cloud by caller")
-        return {"route": route_override, "reasons": reasons}
+        reason = (
+            "route forced to local by caller"
+            if route_override == "local"
+            else "route forced to cloud by caller"
+        )
+        return {"route": route_override, "reasons": [reason]}
 
     route = "local"
+    total_rows = 0
+    total_bytes = 0
     for table in tables:
         name = table["name"]
         if table["force_cloud"]:
@@ -128,20 +131,27 @@ def decide(tables: list[dict], route_override: str, max_mb: float, max_rows: int
             route = "cloud"
             reasons.append(f"{name}: row count unknown within timeout, cannot size the download")
             continue
-        if table["rows"] > max_rows:
-            route = "cloud"
-            reasons.append(f"{name}: {table['rows']:,} rows exceeds local limit {max_rows:,}")
         if table["estimated_bytes"] is None:
             route = "cloud"
             reasons.append(f"{name}: download size could not be estimated")
-        elif table["estimated_bytes"] > max_mb * 1024 * 1024:
-            route = "cloud"
-            reasons.append(
-                f"{name}: ~{common.human_bytes(table['estimated_bytes'])} exceeds local limit {max_mb:g}MB"
-            )
+            continue
+        total_rows += table["rows"]
+        total_bytes += table["estimated_bytes"]
+
+    # Thresholds apply to the whole job, not to each table in isolation.
+    if total_rows > max_rows:
+        route = "cloud"
+        reasons.append(f"total {total_rows:,} rows exceeds local limit {max_rows:,}")
+    if total_bytes > max_mb * 1024 * 1024:
+        route = "cloud"
+        reasons.append(
+            f"total ~{common.human_bytes(total_bytes)} exceeds local limit {max_mb:g}MB"
+        )
     if route == "local":
-        total = sum(t["estimated_bytes"] or 0 for t in tables)
-        reasons.append(f"all tables fit local limits (total ~{common.human_bytes(total)})")
+        reasons.append(
+            f"all tables fit local limits "
+            f"(total {total_rows:,} rows, ~{common.human_bytes(total_bytes)})"
+        )
     return {"route": route, "reasons": reasons}
 
 
@@ -184,7 +194,7 @@ def main() -> None:
     args = parser.parse_args()
 
     spec = common.load_spec(args.spec)
-    if spec.get("script") and not spec.get("tables"):
+    if spec.get("script"):
         result = {
             "job": spec["job"],
             "route": args.route if args.route != "auto" else "cloud",

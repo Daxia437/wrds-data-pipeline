@@ -1,10 +1,10 @@
-"""Short-term reversal example on a CRSP monthly panel.
+"""Short-term reversal example on CRSP monthly data built from daily returns.
 
-Signal: current-month return. Portfolio: equal-weighted deciles, long the
-worst-performing decile (D1) and short the best (D10), held for the next
-month. The t statistic is an ordinary time-series t-test (no Newey-West).
+Signal: month-t return (delisting-adjusted). Portfolio: equal-weighted deciles,
+long D1 (worst) and short D10 (best), held for the next month. The t statistic
+is an ordinary time-series t-test (no Newey-West).
 
-Usage (from your project root, after the spec has been pulled):
+Usage (from the project root, after the spec has been pulled):
 
     python <skill-dir>/examples/us_st_reversal/analyze.py --data data/us_st_reversal_daily
 """
@@ -26,17 +26,20 @@ DECILES = 10
 def load_panel(data_dir: Path) -> pd.DataFrame:
     frame = pd.read_parquet(data_dir / "crsp_monthly.parquet")
     frame["month"] = pd.to_datetime(frame["month"])
+    # Delisting-adjusted month-t return (dlret is null outside the delisting month).
+    frame["ret_adj"] = (1 + frame["ret_m"]) * (1 + frame["dlret"].fillna(0.0)) - 1
+    # Formation-month filters use month-t information only (no look-ahead).
     frame = frame[(frame["avg_prc"] >= MIN_PRICE) & (frame["n_days"] >= MIN_DAYS)].copy()
     frame.sort_values(["permno", "month"], inplace=True)
-    # Signal at month t, return realized at t+1.
-    frame["ret_next"] = frame.groupby("permno")["ret_m"].shift(-1)
+    # Holding return = next month's return; align signal(t) with return(t+1).
+    frame["ret_next"] = frame.groupby("permno")["ret_adj"].shift(-1)
     frame["month_next"] = frame.groupby("permno")["month"].shift(-1)
     frame = frame[frame["month_next"] == frame["month"] + pd.offsets.MonthBegin(1)]
     return frame.dropna(subset=["ret_next"])
 
 
 def decile_returns(frame: pd.DataFrame) -> pd.DataFrame:
-    ranked = frame.groupby("month")["ret_m"].transform(
+    ranked = frame.groupby("month")["ret_adj"].transform(
         lambda s: pd.qcut(s.rank(method="first"), DECILES, labels=False) + 1
     )
     frame = frame.assign(decile=ranked)
@@ -70,8 +73,9 @@ def main() -> None:
     returns = decile_returns(panel)
     summary = {
         "sample": f"{returns.index.min():%Y-%m} to {returns.index.max():%Y-%m}",
-        "universe": f"CRSP common stocks, price >= ${MIN_PRICE:.0f}, >= {MIN_DAYS} trading days",
-        "signal": "current-month return",
+        "universe": "CRSP common stocks (SHRCD 10/11, EXCHCD 1-3), delisting-adjusted",
+        "filters": f"month-t avg price >= ${MIN_PRICE:.0f}, >= {MIN_DAYS} trading days",
+        "signal": "month-t return (delisting-adjusted)",
         "holding": "next month, equal-weighted deciles",
         "long_short": "D1 minus D10 (long losers, short winners)",
         "t_test": "ordinary time-series t-test (no Newey-West)",

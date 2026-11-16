@@ -22,7 +22,9 @@ from pathlib import Path
 import wrds_common as common
 
 HOST = "wrds-cloud.wharton.upenn.edu"
-PGPASS = "wrds-pgdata.wharton.upenn.edu:9737:wrds:{user}:{password}\n"
+PG_HOST = "wrds-pgdata.wharton.upenn.edu"
+PG_PORT = "9737"
+PG_DB = "wrds"
 
 JOB_TEMPLATE = """#!/bin/bash
 #$ -N {name}
@@ -79,19 +81,55 @@ def _detect_remote_root(ssh) -> str:
     return f"{_remote_home(ssh)}/wrds_jobs"
 
 
+def _pgpass_escape(value: str) -> str:
+    return value.replace("\\", "\\\\").replace(":", "\\:")
+
+
+def _merge_pgpass(content: str, prefix: str, entry: str) -> tuple[str, bool]:
+    """Upsert `entry` (the line starting with `prefix`) into the .pgpass text.
+    Returns (new_content, replaced). Other hosts/databases/users are untouched."""
+    lines = content.splitlines(keepends=True)
+    replaced = False
+    for i, line in enumerate(lines):
+        if line.startswith(prefix):
+            lines[i] = entry
+            replaced = True
+    if not replaced:
+        lines.append(entry)
+    return "".join(lines), replaced
+
+
 def _ensure_pgpass(ssh) -> None:
+    """Write the current user's .pgpass line, updating it in place when the
+    password changes, without touching lines for other hosts, databases or
+    users. The password never reaches the terminal or the job log."""
     user, password = common.credentials()
-    _, exists = _run(ssh, "test -f ~/.pgpass && echo ok")
-    if exists.strip().endswith("ok"):
-        return
+    remote_home = _remote_home(ssh)
+    prefix = f"{PG_HOST}:{PG_PORT}:{PG_DB}:{user}:"
+    entry = prefix + _pgpass_escape(password) + "\n"
+
+    content = ""
     sftp = ssh.open_sftp()
     try:
-        with sftp.open(f"{_remote_home(ssh)}/.pgpass", "w") as handle:
-            handle.write(PGPASS.format(user=user, password=password).encode())
+        try:
+            with sftp.open(f"{remote_home}/.pgpass", "r") as handle:
+                content = handle.read().decode()
+        except (IOError, OSError):
+            content = ""
     finally:
         sftp.close()
-    _run(ssh, "chmod 600 ~/.pgpass")
-    print("created ~/.pgpass on the cloud host (mode 600)")
+
+    new_content, replaced = _merge_pgpass(content, prefix, entry)
+
+    sftp = ssh.open_sftp()
+    try:
+        with sftp.open(f"{remote_home}/.pgpass", "w") as handle:
+            handle.write(new_content.encode())
+    finally:
+        sftp.close()
+    _run(ssh, f"chmod 600 {remote_home}/.pgpass")
+    action = "updated" if replaced else "created"
+    print(f"{action} ~/.pgpass for {user} on the cloud host (mode 600)")
 
 
 def _state_path(job: str) -> Path:
@@ -112,6 +150,25 @@ def _write_state(state: dict) -> None:
 def _tail_log(ssh, remote_dir: str, lines: int = 40) -> str:
     _, text = _run(ssh, f"tail -{lines} {remote_dir}/job.log 2>/dev/null")
     return text
+
+
+def _job_exit_code(ssh, remote_dir: str) -> int | None:
+    _, text = _run(ssh, f"grep -oE 'EXIT_CODE=[0-9-]+' {remote_dir}/job.log 2>/dev/null | tail -1")
+    text = text.strip()
+    if not text:
+        return None
+    try:
+        return int(text.rsplit("=", 1)[1])
+    except ValueError:
+        return None
+
+
+def _classify_status(tables: list, errors: list) -> str:
+    if not errors:
+        return "SUCCESS"
+    if tables:
+        return "PARTIAL_SUCCESS"
+    return "FAILED"
 
 
 # --------------------------------------------------------------------------- #
@@ -139,12 +196,18 @@ def cmd_submit(args) -> None:
             sftp.putfo(
                 io.BytesIO(json.dumps(spec, indent=2).encode()), f"{remote_dir}/spec.json"
             )
-            if args.script:
-                sftp.put(args.script, f"{remote_dir}/user_script.py")
+            script_path = args.script or spec.get("script")
+            if script_path:
+                script_file = Path(script_path).expanduser()
+                if not script_file.is_file():
+                    common.fail(f"script not found: {script_file}")
+                sftp.put(str(script_file), f"{remote_dir}/user_script.py")
                 entry = "user_script.py"
-            else:
+            elif spec.get("tables"):
                 sftp.put(str(common.SCRIPTS_DIR / "run_remote.py"), f"{remote_dir}/run_remote.py")
                 entry = "run_remote.py"
+            else:
+                common.fail("spec has no tables and no script; nothing to run")
             job_sh = JOB_TEMPLATE.format(
                 name=job[:10],
                 remote_dir=remote_dir,
@@ -184,7 +247,7 @@ def cmd_submit(args) -> None:
         ssh.close()
 
 
-def _wait(ssh, state: dict, timeout: int) -> None:
+def _wait(ssh, state: dict, timeout: int) -> int | None:
     job_id = state["job_id"]
     print(f"waiting for job {job_id} (queue waits of minutes are normal) ...")
     started = time.time()
@@ -192,8 +255,10 @@ def _wait(ssh, state: dict, timeout: int) -> None:
         _, qstat = _run(ssh, "qstat")
         if job_id not in qstat:
             print(f"job left the queue after {int(time.time() - started)}s")
+            exit_code = _job_exit_code(ssh, state["remote_dir"])
+            print(f"job exit code: {exit_code if exit_code is not None else 'unknown'}")
             print(_tail_log(ssh, state["remote_dir"], 25))
-            return
+            return exit_code
         time.sleep(20)
     common.fail(f"job {job_id} still queued after {timeout}s; check with status later")
 
@@ -247,8 +312,19 @@ def _pull(ssh, state: dict, max_mb: float, only: list[str] | None) -> None:
         except IOError:
             common.fail("remote manifest.json missing; check the job log")
         manifest = json.loads((local_dir / "manifest.json").read_text(encoding="utf-8"))
+        tables_meta = manifest.get("tables", [])
+        errors = manifest.get("errors", [])
+        exit_code = _job_exit_code(ssh, state["remote_dir"])
+        status = _classify_status(tables_meta, errors)
+        print(
+            f"job status: {status} "
+            f"(exit {exit_code if exit_code is not None else 'unknown'}, "
+            f"{len(tables_meta)} tables, {len(errors)} errors)"
+        )
+        for err in errors:
+            print(f"  ! {err.get('name', '?')}: {err.get('error', '')[:120]}")
 
-        wanted = [t for t in manifest.get("tables", []) if not only or t["name"] in only]
+        wanted = [t for t in tables_meta if not only or t["name"] in only]
         total = sum(sizes.get(f"{t['name']}.parquet", 0) for t in wanted)
         limit = max_mb * 1024 * 1024
 
@@ -280,6 +356,9 @@ def _pull(ssh, state: dict, max_mb: float, only: list[str] | None) -> None:
         "remote_data_dir": remote_data_dir,
         "submitted_utc": state.get("submitted_utc"),
         "output_dir": str(local_dir),
+        "status": status,
+        "exit_code": exit_code,
+        "errors": errors,
     }
     common.write_json(local_dir / "provenance.json", provenance)
     print(f"manifest: {local_dir / 'manifest.json'}")

@@ -12,7 +12,7 @@ Turn a data requirement from any empirical research project into either a local 
 1. **Write a spec** — copy `assets/spec.example.json` and fill `job` + `tables`. Each table is either raw `sql` or `library`/`table`/`columns`/`where`.
 2. **Confirm access for unfamiliar libraries** — the first connection reads WRDS's access-aware `list_libraries()` metadata (schema `USAGE` plus friendly-view dependencies), excludes sample/trial libraries, and caches each authorized library as `ok` for 90 days. It does not query every table. `python scripts/discover.py` shows the cached summary; `--libraries` lists the authorized libraries, `--refresh` rebuilds the snapshot, and `--gaps` lists tables that failed at run time. Subscriptions vary by institution, so verify an unfamiliar table before writing SQL: `--schema <name>` lists tables, while `--table <schema>.<table>` lists columns and runs a real-column access probe. Raw catalog visibility or `SELECT` on an outer view is not sufficient. The library snapshot is only a coverage signal; `plan.py` warns when a spec targets a library outside the authorization list or a table with a known gap. The cache defaults to `Path.home() / ".wrds_inventory.json"`, so projects and agent apps under the same OS user share it automatically across Windows, macOS and Linux without per-session configuration. Use the project directory only when home is not writable; `WRDS_INVENTORY` is an optional override and expands `~`.
 3. **Verify access once per machine** — `python scripts/check_env.py`. It checks local credentials, the PostgreSQL endpoint, the cloud SSH login, the cloud Python stack and the cloud `~/.pgpass`.
-4. **Let the router decide** — `python scripts/plan.py --spec spec.json`. It estimates rows and download bytes per table, then prints the route (`local` or `cloud`) with reasons.
+4. **Let the router decide** — `python scripts/plan.py --spec spec.json`. It estimates rows and download bytes per table, sums them across the whole job, then prints the route (`local` or `cloud`) with reasons.
 5. **Run the chosen path**:
    - local: `python scripts/run_local.py --spec spec.json`
    - cloud: `python scripts/run_cloud.py submit --spec spec.json --wait`
@@ -27,8 +27,8 @@ Estimator output drives the decision; thresholds live in `scripts/plan.py` and c
 
 | Condition | Route |
 |---|---|
-| estimated download ≤ 250 MB and ≤ 2.5M rows | local |
-| above either threshold, or row count unknown | cloud |
+| total download ≤ 250 MB and ≤ 2.5M rows (summed over all tables) | local |
+| above either threshold, or any table's row count unknown | cloud |
 | cross-table joins over full-history panels | cloud |
 | iterative exploration, schema checks, ≤ 5 queries | local |
 
@@ -47,7 +47,7 @@ data/<job>/
 
 Cloud adds `cloud_run.json` (job id, remote dirs, submit time) and keeps code, logs and `out/manifest.json` under `<remote_root>/<job>/`, with `remote_root` defaulting to `~/wrds_jobs` so jobs survive a full or unprovisioned scratch. Pin it with `--remote-root` or `WRDS_CLOUD_ROOT`. Only large parquet outputs should go to scratch, via `--scratch-dir` or `WRDS_CLOUD_SCRATCH`. Full schemas: `references/contracts.md`.
 
-Cloud scripts handed to `--script` must write metadata into `out/` (and large parquet into `$WRDS_DATA_DIR` when set) and must call `wrds.Connection()` with no arguments (the skill provisions `~/.pgpass` on the cloud host).
+Cloud scripts (given via `--script` or the spec `script` field) must write metadata into `out/` (and large parquet into `$WRDS_DATA_DIR` when set) and must call `wrds.Connection()` with no arguments (the skill provisions `~/.pgpass` on the cloud host).
 
 ## Commands
 

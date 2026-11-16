@@ -14,16 +14,18 @@ Thresholds: `LOCAL_MAX_MB = 250`, `LOCAL_MAX_ROWS = 2_500_000`, both overridable
 
 ## Why these numbers
 
-Measured on this project (2026-11):
+Measured on this account (2026-11). CRSP figures are `select permno, date, prc, ret, vol, shrout from crsp.dsf` (the core daily-return columns, snappy parquet); a wider column set produces a larger file.
 
 | extract | rows | parquet |
 |---|---|---|
-| `crsp.dsf` one month (2024-12) | 2.04M | ~110 MB |
-| `crsp.dsf` full history | ~107M (catalog) | ~6 GB |
-| `comp.funda` since 2024 | 43.6K | <5 MB |
-| `csmar.fs_combas` since 2024 | 90.9K | <10 MB |
+| `crsp.dsf` one month (2024-12) | 204K | ~3 MB |
+| `crsp.dsf` one quarter (2024 Q4) | 620K | ~10 MB |
+| `crsp.dsf` one year (2024) | 2.40M | ~39 MB |
+| `crsp.dsf` full history | not measurable — catalog `reltuples = -1` (a view) | routes to cloud |
+| `comp.funda` `datadate >= 2024-01-01` | 43.6K | <5 MB |
+| `csmar.fs_combas` `accper >= 2024-01-01` | 90.9K | <10 MB |
 
-A quarter of CRSP daily data sits right at the edge: keep single-quarter pulls local, send multi-year or full-history pulls to the cloud.
+A single quarter of CRSP daily data fits comfortably under the local limits; a full year (2.4M rows) sits just under the 2.5M-row threshold, and multi-year or full-history pulls route to the cloud.
 
 ## Route characteristics
 
