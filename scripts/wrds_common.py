@@ -86,6 +86,36 @@ def connect():
 
 
 # --------------------------------------------------------------------------- #
+# cloud ssh
+# --------------------------------------------------------------------------- #
+def known_hosts_paths() -> list[Path]:
+    paths = []
+    override = os.environ.get("WRDS_SSH_KNOWN_HOSTS")
+    if override:
+        paths.append(Path(override).expanduser())
+    paths.append(Path.home() / ".ssh" / "known_hosts")
+    return [path for path in paths if path.is_file()]
+
+
+def ssh_client():
+    """SSH client that verifies the host key instead of trusting any server."""
+    import paramiko
+
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.RejectPolicy())
+    for path in known_hosts_paths():
+        client.load_host_keys(str(path))
+    return client
+
+
+HOST_KEY_HINT = (
+    "Verify the host fingerprint with WRDS support, then trust it once:\n"
+    "  ssh-keyscan -t rsa wrds-cloud.wharton.upenn.edu >> ~/.ssh/known_hosts\n"
+    "or point WRDS_SSH_KNOWN_HOSTS at a known_hosts file you manage."
+)
+
+
+# --------------------------------------------------------------------------- #
 # subscription inventory
 #
 # wrds.list_libraries() is WRDS's access-aware product list, not raw catalog

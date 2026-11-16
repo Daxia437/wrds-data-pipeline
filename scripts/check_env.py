@@ -53,12 +53,13 @@ def check_cloud() -> None:
         return
 
     user, password = common.credentials()
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client = common.ssh_client()
     try:
         client.connect(common_host(), username=user, password=password, timeout=60)
     except Exception as exc:
         record("cloud ssh", False, str(exc).splitlines()[0][:160])
+        if "known_hosts" in str(exc).lower() or "host key" in str(exc).lower():
+            print("      -> " + common.HOST_KEY_HINT.replace("\n", "\n         "))
         return
 
     try:

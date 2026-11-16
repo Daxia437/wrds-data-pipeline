@@ -37,6 +37,15 @@ A `.env` in a project directory overrides the home one, which is useful for a se
 
 Python side needs `pip install wrds pandas pyarrow paramiko`. The agent can install those, but not the `.env`.
 
+## Requirements
+
+- A valid **WRDS account** with your institution's subscription, and permission for the databases your project targets. The skill is free; WRDS access is not part of this repo — WRDS Cloud is included in institutional subscriptions, and what you can reach is whatever your account can reach.
+- Python 3.10+, `git`, an SSH-capable shell (cloud jobs only), and `pip install wrds pandas pyarrow paramiko`.
+
+## Example: end-to-end research task
+
+[`examples/us_st_reversal/`](examples/us_st_reversal/) runs the classic short-term reversal question through the whole pipeline: a cloud spec that aggregates `crsp.dsf` into a monthly panel, and a local analysis script that sorts deciles, forms D1−D10, and reports a time-series t-test. Reproducing it takes two commands and exercises discovery, routing, cloud submission, pull and the manifest contract.
+
 ## Why this skill exists
 
 Empirical research keeps hitting the same loop: pull data from whatever WRDS library the project needs, use it, repeat with a different window or filter. Hand-rolled scripts break in the same three places:
@@ -120,6 +129,17 @@ Date-like columns arrive as `datetime64[ns]` on both routes, so a local and a cl
 - Cloud queue waits of tens of seconds to several minutes are normal at the institutional level.
 - WRDS only. Not for non-WRDS sources.
 
+## Worked example
+
+`examples/us_st_reversal/` is a complete end-to-end run: a `spec.json` that
+submits a CRSP daily panel to WRDS Cloud, and `analyze.py` that turns the
+pulled parquet into decile returns. See
+[`examples/us_st_reversal/README.md`](examples/us_st_reversal/README.md).
+
+## License
+
+[MIT](LICENSE).
+
 ## Repository layout
 
 ```text
@@ -145,4 +165,10 @@ references/
 assets/
 ├── spec.example.json       small local extract
 └── spec.cloud.example.json full-history cloud extract
+examples/
+└── us_st_reversal/         cloud spec + local analysis, end to end
 ```
+
+## License
+
+MIT — see [`LICENSE`](LICENSE). WRDS data itself remains governed by your institution's subscription agreement; the license covers this code only.

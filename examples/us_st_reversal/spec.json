@@ -1,0 +1,11 @@
+{
+  "job": "us_st_reversal_daily",
+  "output_dir": "data",
+  "route": "cloud",
+  "tables": [
+    {
+      "name": "crsp_monthly",
+      "sql": "select permno, date_trunc('month', date)::date as month, exp(sum(ln(1 + ret))) - 1 as ret_m, count(*) as n_days, avg(abs(prc)) as avg_prc, avg(shrout) as avg_shrout from crsp.dsf where date between '2015-01-01' and '2024-12-31' and ret is not null and ret > -1 and hexcd in (1, 2, 3) group by permno, date_trunc('month', date)"
+    }
+  ]
+}

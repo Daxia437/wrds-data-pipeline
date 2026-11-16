@@ -44,9 +44,12 @@ def _ssh():
     import paramiko
 
     user, password = common.credentials()
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(HOST, username=user, password=password, timeout=60)
+    client = common.ssh_client()
+    try:
+        client.connect(HOST, username=user, password=password, timeout=60)
+    except (paramiko.BadHostKeyException, paramiko.UnknownHostKey) as exc:
+        client.close()
+        common.fail(f"SSH host key check failed for {HOST}: {exc}\n{common.HOST_KEY_HINT}")
     return client
 
 
