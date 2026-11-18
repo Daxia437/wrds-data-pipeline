@@ -42,6 +42,23 @@ echo "EXIT_CODE=$?" >> job.log
 # --------------------------------------------------------------------------- #
 # ssh helpers
 # --------------------------------------------------------------------------- #
+DUO_PROMPT_HINTS = ("passcode", "option", "duo", "verification", "factor")
+
+
+def _ki_answers(prompts, password: str) -> list[str]:
+    """Answers for an SSH keyboard-interactive round.
+
+    WRDS Cloud asks for the password first and then for a Duo option
+    (``Passcode or option (1-1):``). Answering ``1`` triggers a Duo Push;
+    echoing the password there would fail the login and burn an attempt.
+    """
+    answers = []
+    for prompt, _echo in prompts:
+        text = (prompt or "").lower()
+        answers.append("1" if any(hint in text for hint in DUO_PROMPT_HINTS) else password)
+    return answers
+
+
 def _ssh():
     import paramiko
 
@@ -49,9 +66,36 @@ def _ssh():
     client = common.ssh_client()
     try:
         client.connect(HOST, username=user, password=password, timeout=60)
-    except (paramiko.BadHostKeyException, paramiko.UnknownHostKey) as exc:
+    except paramiko.BadAuthenticationType as exc:
+        if "keyboard-interactive" not in (exc.allowed_types or []):
+            client.close()
+            common.fail(f"SSH authentication failed for {HOST}: {exc}")
+        try:
+            client.get_transport().auth_interactive(
+                user, lambda title, instructions, prompts: _ki_answers(prompts, password)
+            )
+        except Exception as inner:
+            client.close()
+            common.fail(
+                "SSH authentication failed. WRDS Cloud requires Duo: approve the push on your "
+                f"phone when it arrives and retry. Detail: {inner}"
+            )
+    except paramiko.BadHostKeyException as exc:
         client.close()
         common.fail(f"SSH host key check failed for {HOST}: {exc}\n{common.HOST_KEY_HINT}")
+    except paramiko.AuthenticationException as exc:
+        client.close()
+        common.fail(
+            f"SSH authentication failed for {HOST}. Check the password in .env, approve the Duo "
+            f"push when it arrives, and retry once. A locked account (Duo Disabled) fails the "
+            f"same way. Detail: {exc}"
+        )
+    except paramiko.SSHException as exc:
+        client.close()
+        text = str(exc).lower()
+        if "known_hosts" in text or "host key" in text:
+            common.fail(f"SSH host key check failed for {HOST}: {exc}\n{common.HOST_KEY_HINT}")
+        raise
     return client
 
 

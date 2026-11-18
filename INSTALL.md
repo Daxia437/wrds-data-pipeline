@@ -9,7 +9,7 @@ Paste this into the agent you use:
 ```text
 Install the skill at https://github.com/Daxia437/wrds-data-pipeline
 
-Read this repo's INSTALL.md and follow the installation method that matches your agent and platform — a skills directory, an AGENTS.md pointer, or pasted instructions, whichever applies. Keep the folder name wrds-data-pipeline, then run scripts/check_env.py from my project root and report what passes. Do not create or print any credentials.
+Read INSTALL.md and follow the installation method that matches your agent and platform — a skills directory, an AGENTS.md pointer, or pasted instructions, whichever applies. Keep the folder name wrds-data-pipeline, then run scripts/check_env.py once from my project root and report what passes. WRDS requires a Duo push on every login: ask me to approve it and never retry the login automatically. Do not create or print any credentials.
 ```
 
 Agents with a local filesystem and shell access can complete the install and environment check themselves; ChatGPT has no filesystem and uses the pasted-instructions path below. Start a new session afterwards so the skill is registered.

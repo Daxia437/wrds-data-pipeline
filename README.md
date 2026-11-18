@@ -9,7 +9,7 @@ Paste this into your agent. It points the agent at the platform-specific install
 ```text
 Install the skill at https://github.com/Daxia437/wrds-data-pipeline
 
-Read INSTALL.md and follow the installation method that matches your agent and platform — a skills directory, an AGENTS.md pointer, or pasted instructions, whichever applies. Keep the folder name wrds-data-pipeline, then run scripts/check_env.py from my project root and report what passes. Do not create or print any credentials.
+Read INSTALL.md and follow the installation method that matches your agent and platform — a skills directory, an AGENTS.md pointer, or pasted instructions, whichever applies. Keep the folder name wrds-data-pipeline, then run scripts/check_env.py once from my project root and report what passes. WRDS requires a Duo push on every login: ask me to approve it and never retry the login automatically. Do not create or print any credentials.
 ```
 
 Installation differs by agent: some read a skill folder, some read an `AGENTS.md` pointer, and ChatGPT (which has no filesystem) uses [`platforms/chatgpt-instructions.md`](platforms/chatgpt-instructions.md) pasted into a Project or custom GPT. The agent picks whichever method applies; the full per-platform steps are in [`INSTALL.md`](INSTALL.md). Start a new session after installing so the skill is picked up.
@@ -27,9 +27,24 @@ A `.env` in a project directory overrides the home one, which is useful for a se
 
 Python side needs `pip install wrds pandas pyarrow paramiko`. The agent can install those, but not the `.env`.
 
+### Keep the account working: Duo and lockouts
+
+WRDS sends a **Duo push on every API and SSH login**, PostgreSQL included. The skill cannot approve it — you do, on your phone. Ten unanswered pushes lock the account, and a locked account fails exactly like a wrong password (`PAM authentication failed`, or `Authentication failed` over SSH), so check Duo before editing `.env`.
+
+What to do every session:
+
+1. Log in at [wrds-www.wharton.upenn.edu](https://wrds-www.wharton.upenn.edu/) in a browser first and approve the push.
+2. Run the skill from the same network as that browser session. Do not switch Wi-Fi or turn a VPN on/off in between.
+3. Stay near your phone. Never leave an agent retrying logins unattended — a retry loop is what triggers the 10-attempt lockout. `check_env.py` opens several connections, so run it once, not in a loop.
+4. If no push arrives, open the Duo app manually and wait before retrying once.
+
+**Prefer the cloud path for anything beyond a quick lookup.** One SSH login costs one push; the job then reaches PostgreSQL through the cloud `~/.pgpass`, so submission, queue wait and result pull all happen inside that single session (`submit --wait`). The local PostgreSQL route pushes a new Duo prompt for every new connection.
+
+If the account is already locked (`Duo Disabled`), ask WRDS Support to reset it. Retrying before the reset only lengthens the lockout.
+
 ## Requirements
 
-- A valid **WRDS account** with your institution's subscription, and permission for the databases your project targets. The skill is free; WRDS access is not part of this repo — WRDS Cloud is included in institutional subscriptions, and what you can reach is whatever your account can reach.
+- A valid **WRDS account** with your institution's subscription, Duo enrolled (every login needs an approved push), and permission for the databases your project targets. The skill is free; WRDS access is not part of this repo — WRDS Cloud is included in institutional subscriptions, and what you can reach is whatever your account can reach.
 - Python 3.10+, `git`, an SSH-capable shell (cloud jobs only), and `pip install wrds pandas pyarrow paramiko`.
 
 ## Example: end-to-end research task
